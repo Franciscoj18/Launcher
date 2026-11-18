@@ -12,6 +12,8 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Constraints
 import com.calma.launcher.R
+import com.calma.launcher.data.HomeWallpaper
+import com.calma.launcher.data.Prefs
 
 val Poppins = FontFamily(
     Font(R.font.poppins_light, FontWeight.Light),
@@ -23,7 +25,16 @@ val Poppins = FontFamily(
 /** Roboto Condensed del sistema: la letra alta y delgada del mes. */
 val Condensed = FontFamily(android.graphics.Typeface.create("sans-serif-condensed-light", android.graphics.Typeface.NORMAL))
 
-val Accent = Color(0xFFFF6B6B)
+/** Color de acento elegido en Ajustes (o sacado del fondo en modo automático). */
+val Accent: Color
+    get() = if (Prefs.accentMode == "auto") (HomeWallpaper.autoAccent ?: Color(Prefs.accentColor))
+    else Color(Prefs.accentColor)
+
+/** Colores para elegir en Ajustes. */
+val AccentChoices = listOf(
+    0xFFFF6B6B, 0xFFFF8FB1, 0xFFFF9F43, 0xFFFFD166,
+    0xFF6EE7B7, 0xFF67C8FF, 0xFFB69CFF, 0xFFFFFFFF,
+).map { it.toInt() }
 
 @Composable
 fun CalmaTheme(content: @Composable () -> Unit) {

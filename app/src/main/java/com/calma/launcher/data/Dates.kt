@@ -15,7 +15,9 @@ class Dates(millis: Long, val lang: String, val use24h: Boolean) {
     val weekday: String = dt.dayOfWeek.getDisplayName(TextStyle.FULL, locale).lowercase(locale)
     val weekdayShort: String = dt.dayOfWeek.getDisplayName(TextStyle.SHORT, locale).removeSuffix(".")
         .replaceFirstChar { it.titlecase(locale) }
+    val monthShort: String = dt.month.getDisplayName(TextStyle.SHORT, locale).removeSuffix(".").lowercase(locale)
     val day: Int = dt.dayOfMonth
+    val dayOfYear: Int = dt.dayOfYear
     val year: Int = dt.year
     val hour24: Int = dt.hour
     val minute: Int = dt.minute

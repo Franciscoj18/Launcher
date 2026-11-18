@@ -12,6 +12,7 @@ import android.content.IntentFilter
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
+import android.os.PowerManager
 import android.provider.Settings
 import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
@@ -41,8 +42,23 @@ class LockService : Service() {
 
     private val screenReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
-            if (intent.action == Intent.ACTION_SCREEN_OFF && Prefs.lockEnabled) {
-                LockActivity.show(context)
+            when (intent.action) {
+                Intent.ACTION_SCREEN_OFF -> if (Prefs.lockEnabled) LockActivity.show(context)
+                Intent.ACTION_POWER_CONNECTED -> {
+                    // Modo reposo: al conectar el cargador con la pantalla apagada, se enciende sola
+                    val pm = context.getSystemService(PowerManager::class.java)
+                    if (Prefs.lockEnabled && Prefs.reposo && pm != null && !pm.isInteractive) {
+                        LockActivity.show(context)
+                        try {
+                            @Suppress("DEPRECATION")
+                            val wl = pm.newWakeLock(
+                                PowerManager.SCREEN_BRIGHT_WAKE_LOCK or PowerManager.ACQUIRE_CAUSES_WAKEUP,
+                                "calma:reposo",
+                            )
+                            wl.acquire(4000)
+                        } catch (_: Exception) {}
+                    }
+                }
             }
         }
     }
@@ -72,7 +88,12 @@ class LockService : Service() {
         val type = if (Build.VERSION.SDK_INT >= 34) ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE else 0
         ServiceCompat.startForeground(this, NOTIF_ID, n, type)
         ContextCompat.registerReceiver(
-            this, screenReceiver, IntentFilter(Intent.ACTION_SCREEN_OFF), ContextCompat.RECEIVER_NOT_EXPORTED
+            this, screenReceiver,
+            IntentFilter().apply {
+                addAction(Intent.ACTION_SCREEN_OFF)
+                addAction(Intent.ACTION_POWER_CONNECTED)
+            },
+            ContextCompat.RECEIVER_NOT_EXPORTED
         )
     }
 

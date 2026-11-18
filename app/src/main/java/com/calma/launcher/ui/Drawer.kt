@@ -3,6 +3,7 @@ package com.calma.launcher.ui
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -49,6 +50,8 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -62,6 +65,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.calma.launcher.data.AppEntry
 import com.calma.launcher.data.Apps
+import com.calma.launcher.data.HomeWallpaper
 import com.calma.launcher.data.Prefs
 import kotlinx.coroutines.delay
 
@@ -113,10 +117,16 @@ fun AppDrawer(pickMode: Boolean, onDismiss: () -> Unit, onChoose: (AppEntry) -> 
         onChoose(e)
     }
 
+    val blurred = HomeWallpaper.blurred
+    Box(Modifier.fillMaxSize()) {
+    if (blurred != null) {
+        val img = remember(blurred) { blurred.asImageBitmap() }
+        Image(img, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+    }
     Column(
         Modifier
             .fillMaxSize()
-            .background(Color(0xE6070709))
+            .background(if (blurred != null) Color(0x8C070709) else Color(0xE6070709))
             .systemBarsPadding()
             .imePadding()
     ) {
@@ -205,6 +215,7 @@ fun AppDrawer(pickMode: Boolean, onDismiss: () -> Unit, onChoose: (AppEntry) -> 
                 }
             }
         }
+    }
     }
 }
 

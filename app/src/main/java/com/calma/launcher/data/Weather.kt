@@ -30,6 +30,8 @@ import kotlin.math.roundToInt
 
 class Place(val name: String, val detail: String, val lat: Double, val lon: Double)
 
+class Day(val date: java.time.LocalDate, val code: Int, val max: Int, val min: Int)
+
 /** Clima de Open-Meteo (gratis, sin cuenta). */
 object Weather {
     private const val STALE_MS = 30 * 60 * 1000L
@@ -45,10 +47,24 @@ object Weather {
             val json = withContext(Dispatchers.IO) {
                 get(
                     "https://api.open-meteo.com/v1/forecast?latitude=$lat&longitude=$lon" +
-                        "&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m,is_day&timezone=auto"
+                        "&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m,is_day" +
+                        "&daily=weather_code,temperature_2m_max,temperature_2m_min&forecast_days=7&timezone=auto"
                 )
             } ?: return
-            val cur = JSONObject(json).optJSONObject("current") ?: return
+            val root = JSONObject(json)
+            root.optJSONObject("daily")?.let { daily ->
+                val times = daily.optJSONArray("time")
+                val codes = daily.optJSONArray("weather_code")
+                val maxs = daily.optJSONArray("temperature_2m_max")
+                val mins = daily.optJSONArray("temperature_2m_min")
+                if (times != null && codes != null && maxs != null && mins != null) {
+                    val parts = (0 until times.length()).map { i ->
+                        "${times.optString(i)},${codes.optInt(i)},${maxs.optDouble(i, 0.0)},${mins.optDouble(i, 0.0)}"
+                    }
+                    Prefs.setForecastValue(parts.joinToString(";"))
+                }
+            }
+            val cur = root.optJSONObject("current") ?: return
             Prefs.setWeather(
                 cur.optDouble("temperature_2m", 0.0).toFloat(),
                 cur.optInt("weather_code", 0),
@@ -198,6 +214,18 @@ object Weather {
             "Clima en ${Prefs.city}: $desc, ${t}°. Viento a $w km/h y humedad del ${Prefs.wHum}%."
         } else {
             "Weather in ${Prefs.city} is $desc with temperature ${t}°. Wind speed $w km/h and humidity ${Prefs.wHum}%."
+        }
+    }
+
+    fun days(): List<Day> {
+        val raw = Prefs.forecast
+        if (raw.isEmpty()) return emptyList()
+        return raw.split(";").mapNotNull { part ->
+            val f = part.split(",")
+            if (f.size < 4) return@mapNotNull null
+            try {
+                Day(java.time.LocalDate.parse(f[0]), f[1].toInt(), f[2].toDouble().roundToInt(), f[3].toDouble().roundToInt())
+            } catch (e: Exception) { null }
         }
     }
 

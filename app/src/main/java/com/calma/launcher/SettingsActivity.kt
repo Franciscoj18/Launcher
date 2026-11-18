@@ -60,14 +60,18 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import com.calma.launcher.data.DeviceInfo
+import com.calma.launcher.data.HomeWallpaper
 import com.calma.launcher.data.IconLoader
 import com.calma.launcher.data.IconPack
 import com.calma.launcher.data.Place
 import com.calma.launcher.data.Prefs
 import com.calma.launcher.data.Weather
+import com.calma.launcher.lock.Live
 import com.calma.launcher.lock.LockActivity
 import com.calma.launcher.lock.LockService
 import com.calma.launcher.ui.Accent
+import com.calma.launcher.ui.AccentChoices
 import com.calma.launcher.ui.CalmaTheme
 import com.calma.launcher.ui.Poppins
 import kotlinx.coroutines.launch
@@ -137,6 +141,24 @@ private fun SettingsScreen(resumeTick: Int) {
         else Toast.makeText(ctx, "Sin permiso de ubicación. Puedes buscar tu ciudad.", Toast.LENGTH_LONG).show()
     }
     val notifPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
+    val pickHome = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
+        if (uri != null) {
+            try {
+                ctx.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            } catch (_: Exception) {}
+            Prefs.setHomeImageValue(uri.toString())
+            scope.launch { HomeWallpaper.load(ctx.applicationContext) }
+        }
+    }
+    val calendarPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
+        scope.launch { DeviceInfo.refreshCalendar(ctx) }
+    }
+    val hasNotifAccess = remember(resumeTick) { Live.hasAccess(ctx) }
+    val hasCalendar = remember(resumeTick) {
+        ContextCompat.checkSelfPermission(ctx, Manifest.permission.READ_CALENDAR) == PackageManager.PERMISSION_GRANTED
+    }
+    var messageText by remember { mutableStateOf(Prefs.message) }
+
     val pickImage = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
         if (uri != null) {
             try {
@@ -191,6 +213,46 @@ private fun SettingsScreen(resumeTick: Int) {
             Button("Buscar Whicons en Play Store") {
                 open(ctx, Intent(Intent.ACTION_VIEW, Uri.parse("market://search?q=whicons&c=apps")))
             }
+            Spacer(Modifier.height(10.dp))
+            SwitchLine("Mostrar nombres bajo los íconos", Prefs.showLabels) { Prefs.setShowLabelsValue(it) }
+        }
+
+        // ---------- Apariencia ----------
+        Card {
+            Title("Apariencia")
+            Label("Estilo del reloj")
+            Choices(
+                options = listOf("eco" to "Eco", "apilado" to "Apilado", "palabras" to "Palabras", "terminal" to "Terminal"),
+                selected = Prefs.clockStyle,
+                onSelect = { Prefs.setClockStyleValue(it) },
+            )
+            Spacer(Modifier.height(14.dp))
+            Label("Color de acento")
+            AccentPicker()
+            Spacer(Modifier.height(14.dp))
+            Label("Mensaje bajo la fecha")
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(Color.White.copy(alpha = 0.08f))
+                    .padding(horizontal = 14.dp, vertical = 12.dp)
+            ) {
+                if (messageText.isEmpty()) {
+                    Text("Escribe algo tuyo (opcional)", color = Color.White.copy(alpha = 0.4f), fontFamily = Poppins, fontSize = 14.sp)
+                }
+                BasicTextField(
+                    value = messageText,
+                    onValueChange = { messageText = it.take(60); Prefs.setMessageValue(messageText) },
+                    singleLine = true,
+                    textStyle = TextStyle(color = Color.White, fontFamily = Poppins, fontSize = 14.sp),
+                    cursorBrush = SolidColor(Accent),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+            Spacer(Modifier.height(6.dp))
+            SwitchLine("Frase del día (si no hay mensaje)", Prefs.dailyQuote) { Prefs.setDailyQuoteValue(it) }
+            SwitchLine("Animación al volver al inicio", Prefs.enterAnim) { Prefs.setEnterAnimValue(it) }
         }
 
         // ---------- Fecha y hora ----------
@@ -276,6 +338,31 @@ private fun SettingsScreen(resumeTick: Int) {
             }
         }
 
+        // ---------- Panel (tercera pantalla) ----------
+        Card {
+            Title("Panel del día")
+            Body("La tercera pantalla muestra tu próxima alarma, tu próximo evento, el clima de la semana, la batería y el almacenamiento.")
+            if (!hasCalendar) {
+                Button("Permitir ver mi calendario") { calendarPermission.launch(Manifest.permission.READ_CALENDAR) }
+            } else {
+                Body("Calendario conectado. ✓")
+            }
+        }
+
+        // ---------- Música y notificaciones ----------
+        Card {
+            Title("Música y notificaciones")
+            Body("Con el acceso a notificaciones, la segunda pantalla se tiñe con el color de la canción que suena y la pantalla de bloqueo muestra qué apps tienen avisos. Calma no guarda ni envía nada.")
+            if (!hasNotifAccess) {
+                Button("Dar acceso a notificaciones") {
+                    open(ctx, Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+                }
+            } else {
+                Body("Acceso activado. ✓")
+            }
+            SwitchLine("Teñir con el color de la portada", Prefs.musicTint) { Prefs.setMusicTintValue(it) }
+        }
+
         // ---------- Widget ----------
         Card {
             Title("Widget de música")
@@ -314,6 +401,9 @@ private fun SettingsScreen(resumeTick: Int) {
                     open(ctx, Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:${ctx.packageName}")))
                 }
             }
+            SwitchLine("Mostrar notificaciones", Prefs.lockNotifs) { Prefs.setLockNotifsValue(it) }
+            SwitchLine("Modo reposo al cargar", Prefs.reposo) { Prefs.setReposoValue(it) }
+            Body("En reposo la hora queda tenue y encendida mientras carga. Toca para ver la pantalla normal.")
             Spacer(Modifier.height(6.dp))
             Body(if (Prefs.lockImage.isEmpty()) "Fondo: el mismo de tu pantalla de inicio." else "Fondo: imagen personalizada.")
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -328,7 +418,29 @@ private fun SettingsScreen(resumeTick: Int) {
         // ---------- Fondo ----------
         Card {
             Title("Fondo de pantalla")
-            Button("Cambiar fondo de pantalla") {
+            Body(
+                if (Prefs.homeImage.isEmpty()) "Ahora usas el fondo del sistema. Elige una imagen tuya aquí para activar el efecto de profundidad y el cajón difuminado."
+                else "Usas tu propia imagen en Calma."
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                SmallButton("Elegir mi imagen") { pickHome.launch(arrayOf("image/*")) }
+                if (Prefs.homeImage.isNotEmpty()) {
+                    SmallButton("Usar la del sistema") {
+                        Prefs.setHomeImageValue("")
+                        scope.launch { HomeWallpaper.load(ctx.applicationContext) }
+                    }
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+            SwitchLine("Efecto de profundidad al inclinar", Prefs.parallax) { Prefs.setParallaxValue(it) }
+            Label("Oscurecer el fondo: ${(Prefs.dim * 100).roundToInt()}%")
+            Slider(
+                value = Prefs.dim,
+                onValueChange = { Prefs.setDimValue(it) },
+                valueRange = 0f..0.7f,
+                colors = SliderDefaults.colors(thumbColor = Color.White, activeTrackColor = Accent),
+            )
+            Button("Cambiar fondo del sistema") {
                 open(ctx, Intent.createChooser(Intent(Intent.ACTION_SET_WALLPAPER), "Fondo de pantalla"))
             }
         }
@@ -438,7 +550,7 @@ private fun Choices(options: List<Pair<String, String>>, selected: String, onSel
                     .padding(vertical = 10.dp),
                 contentAlignment = Alignment.Center,
             ) {
-                Text(label, color = if (on) Color.Black else Color.White, fontFamily = Poppins, fontWeight = FontWeight.Medium, fontSize = 13.sp)
+                Text(label, color = if (on) Color.Black else Color.White, fontFamily = Poppins, fontWeight = FontWeight.Medium, fontSize = 12.sp, maxLines = 1)
             }
         }
     }
@@ -483,4 +595,51 @@ private fun SwitchLine(text: String, on: Boolean, onChange: (Boolean) -> Unit) {
             colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = Accent),
         )
     }
+}
+
+
+@Composable
+private fun AccentPicker() {
+    val auto = Prefs.accentMode == "auto"
+    Row(
+        Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        // Automático: sale del fondo
+        val autoColor = HomeWallpaper.autoAccent ?: Color.White
+        Box(
+            Modifier
+                .size(30.dp)
+                .clip(CircleShape)
+                .background(
+                    androidx.compose.ui.graphics.Brush.sweepGradient(
+                        listOf(Color(0xFFFF6B6B), Color(0xFFFFD166), Color(0xFF6EE7B7), Color(0xFF67C8FF), Color(0xFFB69CFF), Color(0xFFFF6B6B))
+                    )
+                )
+                .border(if (auto) 3.dp else 0.dp, Color.White, CircleShape)
+                .clickable { Prefs.setAccent("auto", Prefs.accentColor) },
+            contentAlignment = Alignment.Center,
+        ) {
+            Box(Modifier.size(12.dp).clip(CircleShape).background(autoColor))
+        }
+        for (c in AccentChoices) {
+            val on = !auto && Prefs.accentColor == c
+            Box(
+                Modifier
+                    .size(if (on) 30.dp else 26.dp)
+                    .clip(CircleShape)
+                    .background(Color(c))
+                    .border(if (on) 3.dp else 0.dp, Color.White.copy(alpha = 0.9f), CircleShape)
+                    .clickable { Prefs.setAccent("custom", c) }
+            )
+        }
+    }
+    Text(
+        if (auto) "Automático: se toma del fondo de pantalla" else "Elegido por ti",
+        color = Color.White.copy(alpha = 0.5f),
+        fontFamily = Poppins,
+        fontSize = 11.sp,
+        modifier = Modifier.padding(top = 6.dp),
+    )
 }

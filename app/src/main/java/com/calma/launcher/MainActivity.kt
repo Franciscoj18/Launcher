@@ -1,5 +1,8 @@
 package com.calma.launcher
 
+import android.Manifest
+import android.app.AlarmManager
+import android.app.WallpaperManager
 import android.appwidget.AppWidgetHost
 import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProviderInfo
@@ -15,15 +18,19 @@ import androidx.activity.SystemBarStyle
 import androidx.activity.addCallback
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
+import com.calma.launcher.data.DeviceInfo
+import com.calma.launcher.data.HomeWallpaper
 import com.calma.launcher.data.Prefs
 import com.calma.launcher.data.Weather
 import com.calma.launcher.lock.LockService
 import com.calma.launcher.ui.CalmaTheme
 import com.calma.launcher.ui.HomeScreen
+import com.calma.launcher.ui.Tilt
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
@@ -43,13 +50,27 @@ class MainActivity : ComponentActivity() {
     val now = mutableLongStateOf(System.currentTimeMillis())
     /** Sube cada vez que se presiona el botón de inicio estando aquí. */
     val homePresses = mutableIntStateOf(0)
+    /** Sube cada vez que vuelves al inicio (para la animación de entrada). */
+    val resumes = mutableIntStateOf(0)
+
+    lateinit var tilt: Tilt
+        private set
+
+    private val calendarPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) {
+        lifecycleScope.launch { DeviceInfo.refreshCalendar(this@MainActivity) }
+    }
 
     private var pendingId = -1
     private var pendingInfo: AppWidgetProviderInfo? = null
 
     private val timeReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
-            now.longValue = System.currentTimeMillis()
+            if (intent == null) return
+            when (intent.action) {
+                Intent.ACTION_BATTERY_CHANGED -> DeviceInfo.readBattery(intent)
+                AlarmManager.ACTION_NEXT_ALARM_CLOCK_CHANGED -> DeviceInfo.refreshQuick(this@MainActivity)
+                else -> now.longValue = System.currentTimeMillis()
+            }
         }
     }
 
@@ -61,6 +82,8 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         widgetManager = AppWidgetManager.getInstance(this)
         widgetHost = AppWidgetHost(applicationContext, HOST_ID)
+        tilt = Tilt(this)
+        HomeWallpaper.watchSystemColors(applicationContext)
 
         // En la pantalla de inicio el botón atrás no hace nada (el cajón lo maneja Compose)
         onBackPressedDispatcher.addCallback(this) { }
@@ -81,15 +104,45 @@ class MainActivity : ComponentActivity() {
             addAction(Intent.ACTION_TIME_CHANGED)
             addAction(Intent.ACTION_TIMEZONE_CHANGED)
             addAction(Intent.ACTION_DATE_CHANGED)
+            addAction(Intent.ACTION_BATTERY_CHANGED)
+            addAction(AlarmManager.ACTION_NEXT_ALARM_CLOCK_CHANGED)
         }
-        ContextCompat.registerReceiver(this, timeReceiver, f, ContextCompat.RECEIVER_NOT_EXPORTED)
+        val sticky = ContextCompat.registerReceiver(this, timeReceiver, f, ContextCompat.RECEIVER_NOT_EXPORTED)
+        if (sticky?.action == Intent.ACTION_BATTERY_CHANGED) DeviceInfo.readBattery(sticky)
         now.longValue = System.currentTimeMillis()
     }
 
     override fun onResume() {
         super.onResume()
         now.longValue = System.currentTimeMillis()
+        resumes.intValue++
+        DeviceInfo.refreshQuick(this)
+        lifecycleScope.launch {
+            HomeWallpaper.load(applicationContext)
+            if (HomeWallpaper.autoAccent == null) HomeWallpaper.refreshAccent(applicationContext)
+            if (Prefs.parallax && Prefs.homeImage.isNotEmpty()) tilt.start() else tilt.stop()
+        }
         lifecycleScope.launch { Weather.refreshIfStale() }
+        lifecycleScope.launch { DeviceInfo.refreshCalendar(this@MainActivity) }
+    }
+
+    override fun onPause() {
+        super.onPause()
+        tilt.stop()
+    }
+
+    fun requestCalendar() {
+        calendarPermission.launch(Manifest.permission.READ_CALENDAR)
+    }
+
+    /** Mueve el fondo del sistema al pasar de pantalla (si es más ancho que la pantalla). */
+    fun setWallpaperScroll(fraction: Float) {
+        val token = window?.decorView?.windowToken ?: return
+        try {
+            val wm = WallpaperManager.getInstance(this)
+            wm.setWallpaperOffsetSteps(0.5f, 0f)
+            wm.setWallpaperOffsets(token, fraction.coerceIn(0f, 1f), 0.5f)
+        } catch (_: Exception) {}
     }
 
     override fun onStop() {

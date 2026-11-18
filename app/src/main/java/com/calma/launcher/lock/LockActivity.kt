@@ -21,7 +21,14 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.graphics.drawable.toBitmap
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -39,7 +46,11 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
@@ -95,6 +106,7 @@ class LockActivity : ComponentActivity() {
 
     private val now = mutableLongStateOf(System.currentTimeMillis())
     private val battery = mutableIntStateOf(-1)
+    private val charging = mutableStateOf(false)
     private var background: Bitmap? = null
 
     private val receiver = object : BroadcastReceiver() {
@@ -130,12 +142,24 @@ class LockActivity : ComponentActivity() {
 
         setContent {
             CalmaTheme {
-                LockScreen(
-                    nowMs = now.longValue,
-                    battery = battery.intValue,
-                    image = background,
-                    onUnlock = { unlock() },
-                )
+                val reposo = Prefs.reposo && charging.value
+                var peek by remember { mutableStateOf(false) }
+                LaunchedEffect(reposo) { peek = false }
+                if (reposo && !peek) {
+                    ReposoScreen(
+                        nowMs = now.longValue,
+                        battery = battery.intValue,
+                        onTap = { peek = true },
+                        onUnlock = { unlock() },
+                    )
+                } else {
+                    LockScreen(
+                        nowMs = now.longValue,
+                        battery = battery.intValue,
+                        image = background,
+                        onUnlock = { unlock() },
+                    )
+                }
             }
         }
     }
@@ -163,6 +187,25 @@ class LockActivity : ComponentActivity() {
         val level = i.getIntExtra(BatteryManager.EXTRA_LEVEL, -1)
         val scale = i.getIntExtra(BatteryManager.EXTRA_SCALE, 100)
         if (level >= 0 && scale > 0) battery.intValue = (level * 100f / scale).roundToInt()
+        val plugged = i.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0) != 0
+        if (plugged != charging.value) {
+            charging.value = plugged
+            applyReposo()
+        }
+    }
+
+    /** Con el cargador puesto: pantalla siempre encendida y con poco brillo. */
+    private fun applyReposo() {
+        val on = Prefs.reposo && charging.value
+        val lp = window.attributes
+        if (on) {
+            window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            lp.screenBrightness = 0.08f
+        } else {
+            window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            lp.screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
+        }
+        window.attributes = lp
     }
 
     private fun loadBackground(): Bitmap? {
@@ -321,6 +364,10 @@ private fun LockScreen(nowMs: Long, battery: Int, image: Bitmap?, onUnlock: () -
                     Text("$battery%", color = Color.White, fontFamily = Poppins, fontWeight = FontWeight.Medium, fontSize = 11.sp)
                 }
             }
+            if (Prefs.lockNotifs && Live.notifs.isNotEmpty()) {
+                Spacer(Modifier.height(14.dp))
+                NotifIcons(Live.notifs)
+            }
         }
 
         Column(
@@ -365,5 +412,111 @@ private fun BatteryGlyph(level: Int) {
             topLeft = Offset(sw * 1.6f, size.height - sw * 1.6f - innerH),
             size = Size(size.width - sw * 3.2f, innerH),
         )
+    }
+}
+
+
+@Composable
+private fun NotifIcons(list: List<NotifEntry>) {
+    Row(
+        Modifier
+            .clip(RoundedCornerShape(50))
+            .background(Color.White.copy(alpha = 0.12f))
+            .padding(horizontal = 12.dp, vertical = 7.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        for (n in list) {
+            NotifIcon(n)
+        }
+    }
+}
+
+@Composable
+private fun NotifIcon(n: NotifEntry) {
+    val ctx = LocalContext.current
+    val img = remember(n.pkg, n.icon) {
+        try {
+            val d = n.icon?.loadDrawable(ctx) ?: ctx.packageManager.getApplicationIcon(n.pkg)
+            d.mutate().setTint(android.graphics.Color.WHITE)
+            d.toBitmap(48, 48).asImageBitmap()
+        } catch (e: Exception) { null }
+    }
+    Box {
+        if (img != null) {
+            Image(img, contentDescription = null, modifier = Modifier.size(15.dp))
+        } else {
+            Box(Modifier.size(8.dp).clip(CircleShape).background(Color.White))
+        }
+        if (n.count > 1) {
+            Box(
+                Modifier
+                    .align(Alignment.TopEnd)
+                    .offset(x = 4.dp, y = (-3).dp)
+                    .size(6.dp)
+                    .clip(CircleShape)
+                    .background(Accent)
+            )
+        }
+    }
+}
+
+/** Modo reposo: hora tenue que se mueve un poco cada minuto, mientras carga. */
+@Composable
+private fun ReposoScreen(nowMs: Long, battery: Int, onTap: () -> Unit, onUnlock: () -> Unit) {
+    val d = remember(nowMs, Prefs.lang, Prefs.use24h) { Dates(nowMs, Prefs.lang, Prefs.use24h) }
+    val density = LocalDensity.current
+    val big = with(density) { 96.dp.toSp() }
+    // Posición distinta cada minuto para no marcar la pantalla
+    val rnd = remember(d.minute) { java.util.Random((d.hour24 * 60 + d.minute).toLong()) }
+    val dx = remember(d.minute) { rnd.nextInt(41) - 20 }
+    val dy = remember(d.minute) { rnd.nextInt(81) - 40 }
+    val es = Prefs.lang == "es"
+    var total by remember { mutableStateOf(0f) }
+    val color = Accent.copy(alpha = 0.75f)
+
+    Box(
+        Modifier
+            .fillMaxSize()
+            .background(Color.Black)
+            .pointerInput(Unit) {
+                detectVerticalDragGestures(
+                    onDragStart = { total = 0f },
+                    onDragEnd = { if (total < -200f) onUnlock() },
+                    onVerticalDrag = { change, dragY -> change.consume(); total += dragY },
+                )
+            }
+            .pointerInput(Unit) { detectTapGestures(onTap = { onTap() }) },
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(
+            Modifier.offset(x = dx.dp, y = dy.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Text(
+                "${d.hour2}:${d.minute2}",
+                color = color,
+                fontFamily = Poppins,
+                fontWeight = FontWeight.Light,
+                fontSize = big,
+                lineHeight = big,
+            )
+            Text(
+                "${d.weekday} ${d.day}".replaceFirstChar { it.uppercase() },
+                color = Color.White.copy(alpha = 0.45f),
+                fontFamily = Poppins,
+                fontSize = 13.sp,
+            )
+            if (battery >= 0) {
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    (if (es) "Cargando · " else "Charging · ") + "$battery%",
+                    color = color,
+                    fontFamily = Poppins,
+                    fontWeight = FontWeight.Medium,
+                    fontSize = 12.sp,
+                )
+            }
+        }
     }
 }
