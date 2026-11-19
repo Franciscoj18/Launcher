@@ -402,6 +402,11 @@ private fun SettingsScreen(resumeTick: Int) {
                 }
             }
             SwitchLine("Mostrar notificaciones", Prefs.lockNotifs) { Prefs.setLockNotifsValue(it) }
+            SwitchLine("Mostrar el contenido de los mensajes", Prefs.lockContent) { Prefs.setLockContentValue(it) }
+            SwitchLine("Controles de música", Prefs.lockMusic) { Prefs.setLockMusicValue(it) }
+            if (!hasNotifAccess) {
+                Body("⚠ Las notificaciones y los controles de música necesitan el acceso a notificaciones (ver \"Música y notificaciones\").")
+            }
             SwitchLine("Modo reposo al cargar", Prefs.reposo) { Prefs.setReposoValue(it) }
             Body("En reposo la hora queda tenue y encendida mientras carga. Toca para ver la pantalla normal.")
             Spacer(Modifier.height(6.dp))

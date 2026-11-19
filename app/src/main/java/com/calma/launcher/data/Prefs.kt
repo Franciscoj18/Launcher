@@ -68,6 +68,10 @@ object Prefs {
         private set
     var reposo by mutableStateOf(true)
         private set
+    var lockMusic by mutableStateOf(true)
+        private set
+    var lockContent by mutableStateOf(true)
+        private set
 
     // Apariencia
     var clockStyle by mutableStateOf("eco")      // eco, apilado, palabras, terminal
@@ -122,6 +126,8 @@ object Prefs {
         lockImage = sp.getString("lockImage", "") ?: ""
         lockNotifs = sp.getBoolean("lockNotifs", true)
         reposo = sp.getBoolean("reposo", true)
+        lockMusic = sp.getBoolean("lockMusic", true)
+        lockContent = sp.getBoolean("lockContent", true)
         clockStyle = sp.getString("clockStyle", "eco") ?: "eco"
         accentMode = sp.getString("accentMode", "custom") ?: "custom"
         accentColor = sp.getInt("accentColor", 0xFFFF6B6B.toInt())
@@ -137,6 +143,8 @@ object Prefs {
     }
 
     fun setLockNotifsValue(v: Boolean) { lockNotifs = v; sp.edit().putBoolean("lockNotifs", v).apply() }
+    fun setLockMusicValue(v: Boolean) { lockMusic = v; sp.edit().putBoolean("lockMusic", v).apply() }
+    fun setLockContentValue(v: Boolean) { lockContent = v; sp.edit().putBoolean("lockContent", v).apply() }
     fun setReposoValue(v: Boolean) { reposo = v; sp.edit().putBoolean("reposo", v).apply() }
     fun setClockStyleValue(v: String) { clockStyle = v; sp.edit().putString("clockStyle", v).apply() }
     fun setAccent(mode: String, color: Int) {

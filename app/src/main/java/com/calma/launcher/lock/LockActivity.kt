@@ -1,6 +1,25 @@
 package com.calma.launcher.lock
 
 import android.app.KeyguardManager
+import android.app.PendingIntent
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.SkipNext
+import androidx.compose.material.icons.filled.SkipPrevious
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -158,6 +177,7 @@ class LockActivity : ComponentActivity() {
                         battery = battery.intValue,
                         image = background,
                         onUnlock = { unlock() },
+                        onOpen = { pi, pkg, cancelKey -> openAfterUnlock(pi, pkg, cancelKey) },
                     )
                 }
             }
@@ -237,6 +257,33 @@ class LockActivity : ComponentActivity() {
         }
     }
 
+    /** Desbloquea (si hace falta) y abre la notificación o el reproductor. */
+    private fun openAfterUnlock(pi: PendingIntent?, pkg: String, cancelKey: String?) {
+        val go = {
+            var opened = false
+            if (pi != null) {
+                try { pi.send(); opened = true } catch (_: Exception) {}
+            }
+            if (!opened && pkg.isNotEmpty()) {
+                packageManager.getLaunchIntentForPackage(pkg)?.let {
+                    try { startActivity(it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } catch (_: Exception) {}
+                }
+            }
+            if (cancelKey != null) Live.dismiss(cancelKey)
+            finishQuietly()
+        }
+        val km = getSystemService(KeyguardManager::class.java)
+        if (km != null && km.isKeyguardLocked) {
+            km.requestDismissKeyguard(this, object : KeyguardManager.KeyguardDismissCallback() {
+                override fun onDismissSucceeded() { go() }
+                override fun onDismissError() { go() }
+                override fun onDismissCancelled() { }
+            })
+        } else {
+            go()
+        }
+    }
+
     @Suppress("DEPRECATION")
     private fun finishQuietly() {
         if (isFinishing) return
@@ -247,14 +294,32 @@ class LockActivity : ComponentActivity() {
 
 @OptIn(ExperimentalTextApi::class)
 @Composable
-private fun LockScreen(nowMs: Long, battery: Int, image: Bitmap?, onUnlock: () -> Unit) {
+private fun LockScreen(
+    nowMs: Long,
+    battery: Int,
+    image: Bitmap?,
+    onUnlock: () -> Unit,
+    onOpen: (PendingIntent?, String, String?) -> Unit,
+) {
     val d = remember(nowMs, Prefs.lang, Prefs.use24h) { Dates(nowMs, Prefs.lang, Prefs.use24h) }
     val density = LocalDensity.current
-    val big = with(density) { 132.dp.toSp() }
     val offsetY = remember { Animatable(0f) }
     val scope = rememberCoroutineScope()
     val limit = with(density) { 160.dp.toPx() }
     val progress = (-offsetY.value / limit).coerceIn(0f, 1f)
+    val es = Prefs.lang == "es"
+
+    var expandedState by remember { mutableStateOf(false) }
+    val items = Live.items
+    val expanded = expandedState && items.isNotEmpty()
+    val showMusic = Prefs.lockMusic && Live.hasMedia
+    val compact = showMusic || expanded
+    val bigDp by animateDpAsState(if (compact) 100.dp else 132.dp, tween(350), label = "big")
+    val topPad by animateDpAsState(if (expanded) 70.dp else if (compact) 100.dp else 150.dp, tween(350), label = "top")
+    val big = with(density) { bigDp.toSp() }
+    val overlap = bigDp * 0.16f
+
+    BackHandler(enabled = expanded) { expandedState = false }
 
     Box(
         Modifier
@@ -293,7 +358,7 @@ private fun LockScreen(nowMs: Long, battery: Int, image: Bitmap?, onUnlock: () -
                 .background(
                     Brush.verticalGradient(
                         0f to Color.Black.copy(alpha = 0.10f),
-                        0.45f to Color.Black.copy(alpha = 0.18f),
+                        0.45f to Color.Black.copy(alpha = if (expanded) 0.35f else 0.18f),
                         1f to Color.Black.copy(alpha = 0.65f),
                     )
                 )
@@ -304,7 +369,7 @@ private fun LockScreen(nowMs: Long, battery: Int, image: Bitmap?, onUnlock: () -
                 .fillMaxSize()
                 .offset { IntOffset(0, (offsetY.value * 0.6f).roundToInt()) }
                 .alpha(1f - progress * 0.8f)
-                .padding(top = 150.dp),
+                .padding(top = topPad),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Text(d.weekdayShort, color = Color.White, fontFamily = Poppins, fontWeight = FontWeight.Bold, fontSize = 12.sp, lineHeight = 14.sp)
@@ -326,7 +391,7 @@ private fun LockScreen(nowMs: Long, battery: Int, image: Bitmap?, onUnlock: () -
                     fontSize = big,
                     lineHeight = big,
                 ),
-                modifier = Modifier.offset(y = 12.dp),
+                modifier = Modifier.offset(y = overlap),
             )
             Text(
                 d.minute2,
@@ -338,7 +403,7 @@ private fun LockScreen(nowMs: Long, battery: Int, image: Bitmap?, onUnlock: () -
                     lineHeight = big,
                     drawStyle = Stroke(width = with(density) { 2.5.dp.toPx() }),
                 ),
-                modifier = Modifier.offset(y = (-12).dp),
+                modifier = Modifier.offset(y = -overlap),
             )
             // Línea fina: se llena según la batería
             Box(Modifier.width(150.dp).height(2.dp).background(Color.White.copy(alpha = 0.15f))) {
@@ -349,24 +414,54 @@ private fun LockScreen(nowMs: Long, battery: Int, image: Bitmap?, onUnlock: () -
                         .background(Accent.copy(alpha = 0.75f))
                 )
             }
-            Spacer(Modifier.height(14.dp))
-            if (Prefs.hasWeather) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(Weather.short(Prefs.lang), color = Color.White, fontFamily = Poppins, fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                    Spacer(Modifier.width(8.dp))
-                    Icon(Weather.icon(Prefs.wCode, Prefs.wDay), contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
+            AnimatedVisibility(visible = !expanded) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Spacer(Modifier.height(14.dp))
+                    if (Prefs.hasWeather) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(Weather.short(Prefs.lang), color = Color.White, fontFamily = Poppins, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                            Spacer(Modifier.width(8.dp))
+                            Icon(Weather.icon(Prefs.wCode, Prefs.wDay), contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
+                        }
+                    }
+                    if (battery >= 0) {
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 2.dp)) {
+                            BatteryGlyph(battery)
+                            Spacer(Modifier.width(5.dp))
+                            Text("$battery%", color = Color.White, fontFamily = Poppins, fontWeight = FontWeight.Medium, fontSize = 11.sp)
+                        }
+                    }
                 }
             }
-            if (battery >= 0) {
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 2.dp)) {
-                    BatteryGlyph(battery)
-                    Spacer(Modifier.width(5.dp))
-                    Text("$battery%", color = Color.White, fontFamily = Poppins, fontWeight = FontWeight.Medium, fontSize = 11.sp)
+
+            // Controles del reproductor
+            AnimatedVisibility(visible = showMusic) {
+                Column {
+                    Spacer(Modifier.height(16.dp))
+                    MusicCard(onOpen = { onOpen(Live.playerIntent(), Live.playerPackage(), null) })
                 }
             }
-            if (Prefs.lockNotifs && Live.notifs.isNotEmpty()) {
+
+            // Notificaciones
+            if (Prefs.lockNotifs && items.isNotEmpty()) {
                 Spacer(Modifier.height(14.dp))
-                NotifIcons(Live.notifs)
+                if (!expanded) {
+                    Box(
+                        Modifier
+                            .clip(RoundedCornerShape(50))
+                            .clickable { expandedState = true }
+                    ) {
+                        NotifIcons(Live.notifs, items.size)
+                    }
+                } else {
+                    NotifList(
+                        items = items,
+                        es = es,
+                        onOpen = { n -> onOpen(n.intent, n.pkg, if (n.autoCancel) n.key else null) },
+                        onDismiss = { n -> Live.dismiss(n.key) },
+                        onCollapse = { expandedState = false },
+                    )
+                }
             }
         }
 
@@ -379,12 +474,228 @@ private fun LockScreen(nowMs: Long, battery: Int, image: Bitmap?, onUnlock: () -
         ) {
             Icon(Icons.Filled.KeyboardArrowUp, contentDescription = null, tint = Color.White.copy(alpha = 0.8f))
             Text(
-                if (Prefs.lang == "es") "Desliza hacia arriba" else "Swipe up to unlock",
+                if (es) "Desliza hacia arriba" else "Swipe up to unlock",
                 color = Color.White.copy(alpha = 0.75f),
                 fontFamily = Poppins,
                 fontSize = 11.sp,
             )
         }
+    }
+}
+
+/** Tarjeta con la canción que suena y los botones anterior / reproducir / siguiente. */
+@Composable
+private fun MusicCard(onOpen: () -> Unit) {
+    val art = Live.art
+    val img = remember(art) { art?.asImageBitmap() }
+    Row(
+        Modifier
+            .width(310.dp)
+            .clip(RoundedCornerShape(22.dp))
+            .background(Color.White.copy(alpha = 0.14f))
+            .clickable { onOpen() }
+            .padding(10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            Modifier
+                .size(46.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(Accent.copy(alpha = 0.3f)),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (img != null) {
+                Image(img, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+            } else {
+                Icon(Icons.Filled.MusicNote, contentDescription = null, tint = Color.White, modifier = Modifier.size(22.dp))
+            }
+        }
+        Column(
+            Modifier
+                .weight(1f)
+                .padding(horizontal = 10.dp)
+        ) {
+            Text(
+                Live.title,
+                color = Color.White,
+                fontFamily = Poppins,
+                fontWeight = FontWeight.Medium,
+                fontSize = 13.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            if (Live.artist.isNotBlank()) {
+                Text(
+                    Live.artist,
+                    color = Color.White.copy(alpha = 0.65f),
+                    fontFamily = Poppins,
+                    fontSize = 11.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+        RoundButton(Icons.Filled.SkipPrevious, 34.dp, filled = false) { Live.previous() }
+        RoundButton(if (Live.playing) Icons.Filled.Pause else Icons.Filled.PlayArrow, 40.dp, filled = true) { Live.playPause() }
+        RoundButton(Icons.Filled.SkipNext, 34.dp, filled = false) { Live.next() }
+    }
+}
+
+@Composable
+private fun RoundButton(icon: ImageVector, size: Dp, filled: Boolean, onClick: () -> Unit) {
+    Box(
+        Modifier
+            .size(size)
+            .clip(CircleShape)
+            .background(if (filled) Color.White else Color.Transparent)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(icon, contentDescription = null, tint = if (filled) Color.Black else Color.White, modifier = Modifier.size(size * 0.58f))
+    }
+}
+
+/** Lista desplegada de notificaciones con quién escribió y qué dice. */
+@Composable
+private fun NotifList(
+    items: List<NotifItem>,
+    es: Boolean,
+    onOpen: (NotifItem) -> Unit,
+    onDismiss: (NotifItem) -> Unit,
+    onCollapse: () -> Unit,
+) {
+    Column(Modifier.width(320.dp)) {
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                if (es) "Notificaciones" else "Notifications",
+                color = Color.White,
+                fontFamily = Poppins,
+                fontWeight = FontWeight.Bold,
+                fontSize = 13.sp,
+                modifier = Modifier.weight(1f),
+            )
+            Text(
+                if (es) "Ocultar" else "Hide",
+                color = Accent,
+                fontFamily = Poppins,
+                fontWeight = FontWeight.Medium,
+                fontSize = 12.sp,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(10.dp))
+                    .clickable { onCollapse() }
+                    .padding(horizontal = 8.dp, vertical = 4.dp),
+            )
+        }
+        Spacer(Modifier.height(4.dp))
+        LazyColumn(
+            Modifier.heightIn(max = 250.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            items(items, key = { it.key }) { n ->
+                NotifCard(n, es, onOpen = { onOpen(n) }, onDismiss = { onDismiss(n) })
+            }
+        }
+    }
+}
+
+@Composable
+private fun NotifCard(n: NotifItem, es: Boolean, onOpen: () -> Unit, onDismiss: () -> Unit) {
+    val ctx = LocalContext.current
+    val avatar = remember(n.key, n.largeIcon) {
+        try { n.largeIcon?.loadDrawable(ctx)?.toBitmap(96, 96)?.asImageBitmap() } catch (e: Exception) { null }
+    }
+    val small = remember(n.key, n.smallIcon) {
+        try {
+            val d = n.smallIcon?.loadDrawable(ctx) ?: ctx.packageManager.getApplicationIcon(n.pkg)
+            d.mutate().setTint(android.graphics.Color.WHITE)
+            d.toBitmap(48, 48).asImageBitmap()
+        } catch (e: Exception) { null }
+    }
+    val showContent = Prefs.lockContent
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(18.dp))
+            .background(Color.White.copy(alpha = 0.14f))
+            .clickable { onOpen() }
+            .padding(start = 12.dp, top = 10.dp, bottom = 10.dp, end = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            Modifier
+                .size(36.dp)
+                .clip(CircleShape)
+                .background(Accent.copy(alpha = 0.28f)),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (showContent && avatar != null) {
+                Image(avatar, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+            } else if (small != null) {
+                Image(small, contentDescription = null, modifier = Modifier.size(18.dp))
+            }
+        }
+        Column(
+            Modifier
+                .weight(1f)
+                .padding(horizontal = 10.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    n.app,
+                    color = Color.White.copy(alpha = 0.6f),
+                    fontFamily = Poppins,
+                    fontSize = 10.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false),
+                )
+                Text(
+                    " · " + ago(n.time, es),
+                    color = Color.White.copy(alpha = 0.5f),
+                    fontFamily = Poppins,
+                    fontSize = 10.sp,
+                    maxLines = 1,
+                )
+            }
+            if (showContent) {
+                if (n.title.isNotBlank()) {
+                    Text(n.title, color = Color.White, fontFamily = Poppins, fontWeight = FontWeight.Medium, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+                if (n.text.isNotBlank()) {
+                    Text(n.text, color = Color.White.copy(alpha = 0.82f), fontFamily = Poppins, fontSize = 12.sp, lineHeight = 16.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                }
+            } else {
+                Text(
+                    if (es) "Notificación nueva" else "New notification",
+                    color = Color.White,
+                    fontFamily = Poppins,
+                    fontWeight = FontWeight.Medium,
+                    fontSize = 13.sp,
+                )
+            }
+        }
+        Box(
+            Modifier
+                .size(30.dp)
+                .clip(CircleShape)
+                .clickable { onDismiss() },
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(Icons.Filled.Close, contentDescription = if (es) "Quitar" else "Dismiss", tint = Color.White.copy(alpha = 0.6f), modifier = Modifier.size(16.dp))
+        }
+    }
+}
+
+private fun ago(time: Long, es: Boolean): String {
+    val mins = ((System.currentTimeMillis() - time) / 60_000L).coerceAtLeast(0)
+    return when {
+        mins < 1 -> if (es) "ahora" else "now"
+        mins < 60 -> if (es) "hace $mins min" else "${mins}m ago"
+        mins < 24 * 60 -> if (es) "hace ${mins / 60} h" else "${mins / 60}h ago"
+        else -> if (es) "hace ${mins / (24 * 60)} d" else "${mins / (24 * 60)}d ago"
     }
 }
 
@@ -417,7 +728,7 @@ private fun BatteryGlyph(level: Int) {
 
 
 @Composable
-private fun NotifIcons(list: List<NotifEntry>) {
+private fun NotifIcons(list: List<NotifEntry>, total: Int) {
     Row(
         Modifier
             .clip(RoundedCornerShape(50))
@@ -429,6 +740,14 @@ private fun NotifIcons(list: List<NotifEntry>) {
         for (n in list) {
             NotifIcon(n)
         }
+        Text(
+            "$total",
+            color = Color.White.copy(alpha = 0.85f),
+            fontFamily = Poppins,
+            fontWeight = FontWeight.Medium,
+            fontSize = 11.sp,
+        )
+        Icon(Icons.Filled.KeyboardArrowDown, contentDescription = null, tint = Color.White.copy(alpha = 0.8f), modifier = Modifier.size(16.dp))
     }
 }
 
