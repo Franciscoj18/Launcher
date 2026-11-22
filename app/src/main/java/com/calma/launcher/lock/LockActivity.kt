@@ -99,6 +99,9 @@ import com.calma.launcher.data.Dates
 import com.calma.launcher.data.Prefs
 import com.calma.launcher.data.Weather
 import com.calma.launcher.ui.Accent
+import com.calma.launcher.ui.CardFill
+import com.calma.launcher.ui.MusicCard
+import com.calma.launcher.ui.NotifCard
 import com.calma.launcher.ui.CalmaTheme
 import com.calma.launcher.ui.Poppins
 import kotlinx.coroutines.launch
@@ -483,78 +486,6 @@ private fun LockScreen(
     }
 }
 
-/** Tarjeta con la canción que suena y los botones anterior / reproducir / siguiente. */
-@Composable
-private fun MusicCard(onOpen: () -> Unit) {
-    val art = Live.art
-    val img = remember(art) { art?.asImageBitmap() }
-    Row(
-        Modifier
-            .width(310.dp)
-            .clip(RoundedCornerShape(22.dp))
-            .background(Color.White.copy(alpha = 0.14f))
-            .clickable { onOpen() }
-            .padding(10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Box(
-            Modifier
-                .size(46.dp)
-                .clip(RoundedCornerShape(12.dp))
-                .background(Accent.copy(alpha = 0.3f)),
-            contentAlignment = Alignment.Center,
-        ) {
-            if (img != null) {
-                Image(img, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
-            } else {
-                Icon(Icons.Filled.MusicNote, contentDescription = null, tint = Color.White, modifier = Modifier.size(22.dp))
-            }
-        }
-        Column(
-            Modifier
-                .weight(1f)
-                .padding(horizontal = 10.dp)
-        ) {
-            Text(
-                Live.title,
-                color = Color.White,
-                fontFamily = Poppins,
-                fontWeight = FontWeight.Medium,
-                fontSize = 13.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            if (Live.artist.isNotBlank()) {
-                Text(
-                    Live.artist,
-                    color = Color.White.copy(alpha = 0.65f),
-                    fontFamily = Poppins,
-                    fontSize = 11.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-        }
-        RoundButton(Icons.Filled.SkipPrevious, 34.dp, filled = false) { Live.previous() }
-        RoundButton(if (Live.playing) Icons.Filled.Pause else Icons.Filled.PlayArrow, 40.dp, filled = true) { Live.playPause() }
-        RoundButton(Icons.Filled.SkipNext, 34.dp, filled = false) { Live.next() }
-    }
-}
-
-@Composable
-private fun RoundButton(icon: ImageVector, size: Dp, filled: Boolean, onClick: () -> Unit) {
-    Box(
-        Modifier
-            .size(size)
-            .clip(CircleShape)
-            .background(if (filled) Color.White else Color.Transparent)
-            .clickable(onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) {
-        Icon(icon, contentDescription = null, tint = if (filled) Color.Black else Color.White, modifier = Modifier.size(size * 0.58f))
-    }
-}
-
 /** Lista desplegada de notificaciones con quién escribió y qué dice. */
 @Composable
 private fun NotifList(
@@ -602,137 +533,11 @@ private fun NotifList(
 }
 
 @Composable
-private fun NotifCard(n: NotifItem, es: Boolean, onOpen: () -> Unit, onDismiss: () -> Unit) {
-    val ctx = LocalContext.current
-    val avatar = remember(n.key, n.largeIcon) {
-        try { n.largeIcon?.loadDrawable(ctx)?.toBitmap(96, 96)?.asImageBitmap() } catch (e: Exception) { null }
-    }
-    val small = remember(n.key, n.smallIcon) {
-        try {
-            val d = n.smallIcon?.loadDrawable(ctx) ?: ctx.packageManager.getApplicationIcon(n.pkg)
-            d.mutate().setTint(android.graphics.Color.WHITE)
-            d.toBitmap(48, 48).asImageBitmap()
-        } catch (e: Exception) { null }
-    }
-    val showContent = Prefs.lockContent
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(18.dp))
-            .background(Color.White.copy(alpha = 0.14f))
-            .clickable { onOpen() }
-            .padding(start = 12.dp, top = 10.dp, bottom = 10.dp, end = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Box(
-            Modifier
-                .size(36.dp)
-                .clip(CircleShape)
-                .background(Accent.copy(alpha = 0.28f)),
-            contentAlignment = Alignment.Center,
-        ) {
-            if (showContent && avatar != null) {
-                Image(avatar, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
-            } else if (small != null) {
-                Image(small, contentDescription = null, modifier = Modifier.size(18.dp))
-            }
-        }
-        Column(
-            Modifier
-                .weight(1f)
-                .padding(horizontal = 10.dp)
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    n.app,
-                    color = Color.White.copy(alpha = 0.6f),
-                    fontFamily = Poppins,
-                    fontSize = 10.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f, fill = false),
-                )
-                Text(
-                    " · " + ago(n.time, es),
-                    color = Color.White.copy(alpha = 0.5f),
-                    fontFamily = Poppins,
-                    fontSize = 10.sp,
-                    maxLines = 1,
-                )
-            }
-            if (showContent) {
-                if (n.title.isNotBlank()) {
-                    Text(n.title, color = Color.White, fontFamily = Poppins, fontWeight = FontWeight.Medium, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                }
-                if (n.text.isNotBlank()) {
-                    Text(n.text, color = Color.White.copy(alpha = 0.82f), fontFamily = Poppins, fontSize = 12.sp, lineHeight = 16.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                }
-            } else {
-                Text(
-                    if (es) "Notificación nueva" else "New notification",
-                    color = Color.White,
-                    fontFamily = Poppins,
-                    fontWeight = FontWeight.Medium,
-                    fontSize = 13.sp,
-                )
-            }
-        }
-        Box(
-            Modifier
-                .size(30.dp)
-                .clip(CircleShape)
-                .clickable { onDismiss() },
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(Icons.Filled.Close, contentDescription = if (es) "Quitar" else "Dismiss", tint = Color.White.copy(alpha = 0.6f), modifier = Modifier.size(16.dp))
-        }
-    }
-}
-
-private fun ago(time: Long, es: Boolean): String {
-    val mins = ((System.currentTimeMillis() - time) / 60_000L).coerceAtLeast(0)
-    return when {
-        mins < 1 -> if (es) "ahora" else "now"
-        mins < 60 -> if (es) "hace $mins min" else "${mins}m ago"
-        mins < 24 * 60 -> if (es) "hace ${mins / 60} h" else "${mins / 60}h ago"
-        else -> if (es) "hace ${mins / (24 * 60)} d" else "${mins / (24 * 60)}d ago"
-    }
-}
-
-@Composable
-private fun BatteryGlyph(level: Int) {
-    Canvas(Modifier.size(width = 8.dp, height = 13.dp)) {
-        val sw = 1.2.dp.toPx()
-        val capH = 2.dp.toPx()
-        drawRoundRect(
-            color = Color.White,
-            topLeft = Offset(size.width * 0.3f, 0f),
-            size = Size(size.width * 0.4f, capH),
-            cornerRadius = CornerRadius(1f, 1f),
-        )
-        drawRoundRect(
-            color = Color.White,
-            topLeft = Offset(sw / 2, capH),
-            size = Size(size.width - sw, size.height - capH - sw / 2),
-            cornerRadius = CornerRadius(2.dp.toPx(), 2.dp.toPx()),
-            style = Stroke(width = sw),
-        )
-        val innerH = (size.height - capH - sw * 2.5f) * (level.coerceIn(0, 100) / 100f)
-        drawRect(
-            color = Color.White,
-            topLeft = Offset(sw * 1.6f, size.height - sw * 1.6f - innerH),
-            size = Size(size.width - sw * 3.2f, innerH),
-        )
-    }
-}
-
-
-@Composable
 private fun NotifIcons(list: List<NotifEntry>, total: Int) {
     Row(
         Modifier
             .clip(RoundedCornerShape(50))
-            .background(Color.White.copy(alpha = 0.12f))
+            .background(CardFill)
             .padding(horizontal = 12.dp, vertical = 7.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -839,3 +644,32 @@ private fun ReposoScreen(nowMs: Long, battery: Int, onTap: () -> Unit, onUnlock:
         }
     }
 }
+
+@Composable
+private fun BatteryGlyph(level: Int) {
+    Canvas(Modifier.size(width = 8.dp, height = 13.dp)) {
+        val sw = 1.2.dp.toPx()
+        val capH = 2.dp.toPx()
+        drawRoundRect(
+            color = Color.White,
+            topLeft = Offset(size.width * 0.3f, 0f),
+            size = Size(size.width * 0.4f, capH),
+            cornerRadius = CornerRadius(1f, 1f),
+        )
+        drawRoundRect(
+            color = Color.White,
+            topLeft = Offset(sw / 2, capH),
+            size = Size(size.width - sw, size.height - capH - sw / 2),
+            cornerRadius = CornerRadius(2.dp.toPx(), 2.dp.toPx()),
+            style = Stroke(width = sw),
+        )
+        val innerH = (size.height - capH - sw * 2.5f) * (level.coerceIn(0, 100) / 100f)
+        drawRect(
+            color = Color.White,
+            topLeft = Offset(sw * 1.6f, size.height - sw * 1.6f - innerH),
+            size = Size(size.width - sw * 3.2f, innerH),
+        )
+    }
+}
+
+

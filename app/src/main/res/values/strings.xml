@@ -2,4 +2,7 @@
 <resources>
     <string name="app_name">Calma</string>
     <string name="settings_name">Ajustes de Calma</string>
+    <string name="panel_name">Panel de controles de Calma</string>
+    <string name="panel_summary">Desliza hacia abajo desde la esquina superior para abrir el panel en cualquier app</string>
+    <string name="panel_desc">Calma usa este permiso solo para mostrar su panel de controles sobre otras apps, y para tomar capturas y bloquear la pantalla desde el panel. No lee ni guarda lo que hay en tu pantalla.</string>
 </resources>

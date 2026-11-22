@@ -60,6 +60,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import com.calma.launcher.data.Controls
 import com.calma.launcher.data.DeviceInfo
 import com.calma.launcher.data.HomeWallpaper
 import com.calma.launcher.data.IconLoader
@@ -70,8 +71,10 @@ import com.calma.launcher.data.Weather
 import com.calma.launcher.lock.Live
 import com.calma.launcher.lock.LockActivity
 import com.calma.launcher.lock.LockService
+import com.calma.launcher.panel.PanelService
 import com.calma.launcher.ui.Accent
 import com.calma.launcher.ui.AccentChoices
+import com.calma.launcher.ui.PanelSurface
 import com.calma.launcher.ui.CalmaTheme
 import com.calma.launcher.ui.Poppins
 import kotlinx.coroutines.launch
@@ -154,6 +157,8 @@ private fun SettingsScreen(resumeTick: Int) {
         scope.launch { DeviceInfo.refreshCalendar(ctx) }
     }
     val hasNotifAccess = remember(resumeTick) { Live.hasAccess(ctx) }
+    val panelEnabled = remember(resumeTick) { PanelService.isEnabled(ctx) }
+    val canWriteSettings = remember(resumeTick) { Controls.canWrite(ctx) }
     val hasCalendar = remember(resumeTick) {
         ContextCompat.checkSelfPermission(ctx, Manifest.permission.READ_CALENDAR) == PackageManager.PERMISSION_GRANTED
     }
@@ -227,6 +232,13 @@ private fun SettingsScreen(resumeTick: Int) {
                 onSelect = { Prefs.setClockStyleValue(it) },
             )
             Spacer(Modifier.height(14.dp))
+            SwitchLine("Adaptar los colores al fondo", Prefs.wallTheme) { on ->
+                Prefs.setWallThemeValue(on)
+                if (on) Prefs.setAccent("auto", Prefs.accentColor)
+                HomeWallpaper.refreshAccent(ctx.applicationContext)
+            }
+            Body("Menús, cajón de apps, tarjetas y panel toman el tono de tu fondo de pantalla.")
+            Spacer(Modifier.height(8.dp))
             Label("Color de acento")
             AccentPicker()
             Spacer(Modifier.height(14.dp))
@@ -335,6 +347,43 @@ private fun SettingsScreen(resumeTick: Int) {
                 } else {
                     locationPermission.launch(Manifest.permission.ACCESS_COARSE_LOCATION)
                 }
+            }
+        }
+
+        // ---------- Panel de controles ----------
+        Card {
+            Title("Panel de controles")
+            Body("Linterna, brillo, volumen, rotación, No molestar, música y notificaciones con el estilo de Calma.")
+            SwitchLine("Abrirlo al deslizar hacia abajo en el inicio", Prefs.panelHome) { Prefs.setPanelHomeValue(it) }
+            Spacer(Modifier.height(6.dp))
+            Label("En cualquier app")
+            if (panelEnabled) {
+                Body("Activado. ✓ Desliza hacia abajo desde la esquina superior para abrirlo.")
+            } else {
+                Body("Actívalo en Accesibilidad → Panel de controles de Calma. Android mostrará una advertencia: es normal para este tipo de apps. Calma no lee lo que hay en tu pantalla.")
+                Button("Activar en todas las apps") { open(ctx, Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) }
+            }
+            Spacer(Modifier.height(10.dp))
+            Label("Esquina para abrirlo")
+            Choices(
+                options = listOf("left" to "Izquierda", "right" to "Derecha"),
+                selected = Prefs.panelSide,
+                onSelect = { Prefs.setPanelSideValue(it); PanelService.instance?.refreshTrigger() },
+            )
+            Spacer(Modifier.height(10.dp))
+            if (!canWriteSettings) {
+                Body("Para cambiar el brillo y la rotación desde el panel, Calma necesita \"Modificar ajustes del sistema\".")
+                Button("Permitir brillo y rotación") { open(ctx, Controls.writeSettingsIntent(ctx)) }
+                Spacer(Modifier.height(10.dp))
+            }
+            Label("Botones del panel")
+            val names = listOf(
+                "wifi" to "Wi‑Fi", "data" to "Datos", "bt" to "Bluetooth", "torch" to "Linterna",
+                "rotate" to "Rotación", "dnd" to "No molestar", "shot" to "Captura", "lock" to "Bloquear",
+            )
+            val on = Prefs.panelButtons.split(",").toSet()
+            for ((key, name) in names) {
+                SwitchLine(name, key in on) { Prefs.togglePanelButton(key) }
             }
         }
 
@@ -476,7 +525,7 @@ private fun Card(content: @Composable () -> Unit) {
         Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(22.dp))
-            .background(Color(0xFF151518))
+            .background(PanelSurface)
             .padding(18.dp)
     ) { content() }
 }

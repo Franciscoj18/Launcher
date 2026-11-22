@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.provider.AlarmClock
 import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
@@ -89,6 +90,7 @@ import com.calma.launcher.data.IconLoader
 import com.calma.launcher.data.Prefs
 import com.calma.launcher.data.Weather
 import com.calma.launcher.lock.Live
+import com.calma.launcher.panel.ControlPanel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -153,7 +155,9 @@ fun HomeScreen(activity: MainActivity) {
                     onDragStart = { total = 0f },
                     onDragEnd = {
                         if (total < -swipePx) drawerOpen = true
-                        else if (total > swipePx) expandNotifications(ctx)
+                        else if (total > swipePx) {
+                            if (Prefs.panelHome) activity.panelOpen.value = true else expandNotifications(ctx)
+                        }
                     },
                     onVerticalDrag = { change, dy ->
                         total += dy
@@ -246,6 +250,17 @@ fun HomeScreen(activity: MainActivity) {
                     }
                 },
             )
+        }
+
+        // Panel de controles
+        val panelOpen = activity.panelOpen.value
+        BackHandler(enabled = panelOpen) { activity.closePanel() }
+        AnimatedVisibility(
+            visible = panelOpen,
+            enter = slideInVertically { -it / 4 } + fadeIn(),
+            exit = slideOutVertically { -it / 4 } + fadeOut(),
+        ) {
+            ControlPanel(host = activity)
         }
 
         if (menuOpen) {
@@ -412,7 +427,7 @@ fun WidgetSlot(activity: MainActivity, onAddWidget: () -> Unit) {
                 .fillMaxWidth()
                 .height(110.dp)
                 .clip(shape)
-                .background(Color.White.copy(alpha = 0.08f))
+                .background(CardFill)
                 .border(1.dp, Color.White.copy(alpha = 0.22f), shape)
                 .clickable { onAddWidget() },
             contentAlignment = Alignment.Center,

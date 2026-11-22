@@ -12,8 +12,8 @@ android {
         applicationId = "com.calma.launcher"
         minSdk = 29          // Android 10 (Moto G9 Play)
         targetSdk = 34
-        versionCode = 3
-        versionName = "1.2"
+        versionCode = 4
+        versionName = "1.3"
     }
 
     signingConfigs {
@@ -76,4 +76,5 @@ dependencies {
 
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.5")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.5")
+    implementation("androidx.savedstate:savedstate-ktx:1.2.1")
 }

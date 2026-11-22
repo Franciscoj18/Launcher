@@ -116,7 +116,7 @@ fun PanelPage(d: Dates, activity: MainActivity, enter: () -> Float) {
                         .fillMaxWidth()
                         .appear(enter, 3)
                         .clip(RoundedCornerShape(20.dp))
-                        .background(Color.White.copy(alpha = 0.07f))
+                        .background(CardFill)
                         .padding(horizontal = 10.dp, vertical = 12.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
@@ -167,7 +167,7 @@ private fun InfoRow(icon: ImageVector, title: String, value: String, modifier: M
         modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(20.dp))
-            .background(Color.White.copy(alpha = 0.07f))
+            .background(CardFill)
             .clickable(onClick = onClick)
             .padding(horizontal = 14.dp, vertical = 11.dp),
         verticalAlignment = Alignment.CenterVertically,

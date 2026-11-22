@@ -57,7 +57,7 @@ fun HomeMenu(activity: MainActivity, onDismiss: () -> Unit, onPickWidget: () -> 
             Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(26.dp))
-                .background(Color(0xF21C1C1F))
+                .background(PanelSurface)
                 .padding(vertical = 10.dp)
         ) {
             MenuRow(Icons.Filled.Wallpaper, "Fondo de pantalla") {
@@ -115,7 +115,7 @@ fun WidgetPicker(activity: MainActivity, onDismiss: () -> Unit, onPick: (AppWidg
                 .fillMaxWidth()
                 .heightIn(max = 560.dp)
                 .clip(RoundedCornerShape(26.dp))
-                .background(Color(0xF21C1C1F))
+                .background(PanelSurface)
                 .padding(vertical = 14.dp)
         ) {
             Text(

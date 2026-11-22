@@ -1,6 +1,10 @@
 package com.calma.launcher
 
 import android.Manifest
+import android.accessibilityservice.AccessibilityService
+import android.app.PendingIntent
+import android.os.Handler
+import android.os.Looper
 import android.app.AlarmManager
 import android.app.WallpaperManager
 import android.appwidget.AppWidgetHost
@@ -21,6 +25,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import com.calma.launcher.data.DeviceInfo
@@ -31,9 +36,12 @@ import com.calma.launcher.lock.LockService
 import com.calma.launcher.ui.CalmaTheme
 import com.calma.launcher.ui.HomeScreen
 import com.calma.launcher.ui.Tilt
+import com.calma.launcher.ui.expandNotifications
+import com.calma.launcher.panel.PanelHost
+import com.calma.launcher.panel.PanelService
 import kotlinx.coroutines.launch
 
-class MainActivity : ComponentActivity() {
+class MainActivity : ComponentActivity(), PanelHost {
 
     companion object {
         const val HOST_ID = 2026
@@ -50,6 +58,10 @@ class MainActivity : ComponentActivity() {
     val now = mutableLongStateOf(System.currentTimeMillis())
     /** Sube cada vez que se presiona el botón de inicio estando aquí. */
     val homePresses = mutableIntStateOf(0)
+    /** Panel de controles abierto en el inicio. */
+    val panelOpen = mutableStateOf(false)
+    private val handler = Handler(Looper.getMainLooper())
+
     /** Sube cada vez que vuelves al inicio (para la animación de entrada). */
     val resumes = mutableIntStateOf(0)
 
@@ -155,6 +167,7 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         if (intent.action == Intent.ACTION_MAIN && intent.hasCategory(Intent.CATEGORY_HOME)) {
             homePresses.intValue++
+            panelOpen.value = false
         }
     }
 
@@ -251,4 +264,47 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+
+    // ---------- Panel de controles en el inicio ----------
+
+    override val hostContext: Context get() = this
+
+    override fun closePanel(then: (() -> Unit)?) {
+        if (!panelOpen.value) { then?.invoke(); return }
+        panelOpen.value = false
+        handler.postDelayed({ then?.invoke() }, 260)
+    }
+
+    override fun launch(intent: Intent) {
+        closePanel {
+            try { startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } catch (_: Exception) {}
+        }
+    }
+
+    override fun launchPending(pi: PendingIntent?, pkg: String) {
+        closePanel {
+            var ok = false
+            if (pi != null) try { pi.send(); ok = true } catch (_: Exception) {}
+            if (!ok && pkg.isNotEmpty()) {
+                packageManager.getLaunchIntentForPackage(pkg)?.let {
+                    try { startActivity(it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } catch (_: Exception) {}
+                }
+            }
+        }
+    }
+
+    override fun global(action: Int): Boolean {
+        val svc = PanelService.instance
+        if (svc == null) {
+            if (action == AccessibilityService.GLOBAL_ACTION_NOTIFICATIONS) {
+                closePanel { expandNotifications(this) }
+                return true
+            }
+            return false
+        }
+        closePanel { handler.postDelayed({ svc.performGlobalAction(action) }, 250) }
+        return true
+    }
+
+    override val locked: Boolean get() = false
 }

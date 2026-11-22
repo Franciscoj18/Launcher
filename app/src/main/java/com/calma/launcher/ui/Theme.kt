@@ -30,6 +30,19 @@ val Accent: Color
     get() = if (Prefs.accentMode == "auto") (HomeWallpaper.autoAccent ?: Color(Prefs.accentColor))
     else Color(Prefs.accentColor)
 
+/** Fondo de paneles y menús: oscuro, teñido con el color del fondo de pantalla. */
+val PanelSurface: Color
+    get() = (if (Prefs.wallTheme) HomeWallpaper.surface else null) ?: Color(0xFF1C1C1F)
+
+/** Un tono más claro, para tarjetas dentro de los paneles. */
+val PanelSurfaceHi: Color
+    get() = (if (Prefs.wallTheme) HomeWallpaper.surfaceHi else null) ?: Color(0xFF2C2C30)
+
+/** Relleno de tarjetas sobre el fondo de pantalla. */
+val CardFill: Color
+    get() = if (Prefs.wallTheme && HomeWallpaper.surfaceHi != null) PanelSurfaceHi.copy(alpha = 0.6f)
+    else Color.White.copy(alpha = 0.08f)
+
 /** Colores para elegir en Ajustes. */
 val AccentChoices = listOf(
     0xFFFF6B6B, 0xFFFF8FB1, 0xFFFF9F43, 0xFFFFD166,
@@ -43,8 +56,8 @@ fun CalmaTheme(content: @Composable () -> Unit) {
             primary = Color.White,
             onPrimary = Color.Black,
             secondary = Accent,
-            surface = Color(0xFF1C1C1F),
-            surfaceContainer = Color(0xFF1C1C1F),
+            surface = PanelSurface,
+            surfaceContainer = PanelSurface,
             background = Color.Black,
         ),
         content = content,

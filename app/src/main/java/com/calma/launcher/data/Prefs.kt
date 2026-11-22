@@ -96,6 +96,16 @@ object Prefs {
         private set
     var musicTint by mutableStateOf(true)
         private set
+    var wallTheme by mutableStateOf(true)        // colores de todo Calma según el fondo
+        private set
+
+    // Panel de controles
+    var panelSide by mutableStateOf("right")     // esquina para abrirlo en otras apps
+        private set
+    var panelHome by mutableStateOf(true)        // deslizar abajo en el inicio abre el panel de Calma
+        private set
+    var panelButtons by mutableStateOf("wifi,data,bt,torch,rotate,dnd,shot,lock")
+        private set
 
     // Pronóstico de 7 días: "fecha,codigo,max,min;..."
     var forecast by mutableStateOf("")
@@ -139,6 +149,10 @@ object Prefs {
         parallax = sp.getBoolean("parallax", true)
         dim = sp.getFloat("dim", 0.15f)
         musicTint = sp.getBoolean("musicTint", true)
+        wallTheme = sp.getBoolean("wallTheme", true)
+        panelSide = sp.getString("panelSide", "right") ?: "right"
+        panelHome = sp.getBoolean("panelHome", true)
+        panelButtons = sp.getString("panelButtons", "wifi,data,bt,torch,rotate,dnd,shot,lock") ?: ""
         forecast = sp.getString("forecast", "") ?: ""
     }
 
@@ -158,6 +172,16 @@ object Prefs {
     fun setHomeImageValue(v: String) { homeImage = v; sp.edit().putString("homeImage", v).apply() }
     fun setParallaxValue(v: Boolean) { parallax = v; sp.edit().putBoolean("parallax", v).apply() }
     fun setDimValue(v: Float) { dim = v; sp.edit().putFloat("dim", v).apply() }
+    fun setWallThemeValue(v: Boolean) { wallTheme = v; sp.edit().putBoolean("wallTheme", v).apply() }
+    fun setPanelSideValue(v: String) { panelSide = v; sp.edit().putString("panelSide", v).apply() }
+    fun setPanelHomeValue(v: Boolean) { panelHome = v; sp.edit().putBoolean("panelHome", v).apply() }
+    fun togglePanelButton(key: String) {
+        val all = listOf("wifi", "data", "bt", "torch", "rotate", "dnd", "shot", "lock")
+        val cur = panelButtons.split(",").filter { it.isNotBlank() }.toMutableSet()
+        if (!cur.remove(key)) cur.add(key)
+        panelButtons = all.filter { it in cur }.joinToString(",")
+        sp.edit().putString("panelButtons", panelButtons).apply()
+    }
     fun setMusicTintValue(v: Boolean) { musicTint = v; sp.edit().putBoolean("musicTint", v).apply() }
     fun setForecastValue(v: String) { forecast = v; sp.edit().putString("forecast", v).apply() }
 

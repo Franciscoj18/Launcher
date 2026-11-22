@@ -27,6 +27,11 @@ object HomeWallpaper {
     /** Color de acento calculado del fondo (para el modo automático). */
     var autoAccent by mutableStateOf<Color?>(null)
         private set
+    /** Fondos oscuros teñidos con el color del fondo de pantalla. */
+    var surface by mutableStateOf<Color?>(null)
+        private set
+    var surfaceHi by mutableStateOf<Color?>(null)
+        private set
 
     private var loadedUri = "-"
     private var colorsListener: WallpaperManager.OnColorsChangedListener? = null
@@ -56,8 +61,10 @@ object HomeWallpaper {
     }
 
     fun refreshAccent(ctx: Context) {
-        val c = Colors.fromWallpaper(ctx, image)
-        autoAccent = c?.let { Color(it) }
+        val seed = Colors.seed(ctx, image)
+        autoAccent = seed?.let { Color(Colors.readable(it)) }
+        surface = seed?.let { Color(Colors.darkTint(it, 0.17f)) }
+        surfaceHi = seed?.let { Color(Colors.darkTint(it, 0.27f)) }
     }
 
     fun watchSystemColors(ctx: Context) {

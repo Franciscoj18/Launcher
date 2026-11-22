@@ -126,7 +126,7 @@ fun AppDrawer(pickMode: Boolean, onDismiss: () -> Unit, onChoose: (AppEntry) -> 
     Column(
         Modifier
             .fillMaxSize()
-            .background(if (blurred != null) Color(0x8C070709) else Color(0xE6070709))
+            .background(if (blurred != null) PanelSurface.copy(alpha = 0.62f) else PanelSurface.copy(alpha = 0.95f))
             .systemBarsPadding()
             .imePadding()
     ) {

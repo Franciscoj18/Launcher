@@ -50,15 +50,23 @@ object Colors {
         return Color.HSVToColor(hsv)
     }
 
-    /** Color de acento automático a partir del fondo de pantalla. */
-    fun fromWallpaper(ctx: Context, custom: Bitmap?): Int? {
-        if (custom != null) vivid(custom)?.let { return readable(it) }
+    /** Color base del fondo (sin ajustar). */
+    fun seed(ctx: Context, custom: Bitmap?): Int? {
+        if (custom != null) return vivid(custom)
         return try {
             val wc = WallpaperManager.getInstance(ctx).getWallpaperColors(WallpaperManager.FLAG_SYSTEM) ?: return null
             val options = listOfNotNull(wc.primaryColor, wc.secondaryColor, wc.tertiaryColor).map { it.toArgb() }
             val hsv = FloatArray(3)
-            val pick = options.maxByOrNull { Color.colorToHSV(it, hsv); hsv[1] } ?: return null
-            readable(pick)
+            options.maxByOrNull { Color.colorToHSV(it, hsv); hsv[1] }
         } catch (e: Exception) { null }
+    }
+
+    /** Fondo oscuro teñido con el tono del fondo de pantalla (para tarjetas y paneles). */
+    fun darkTint(c: Int, value: Float): Int {
+        val hsv = FloatArray(3)
+        Color.colorToHSV(c, hsv)
+        hsv[1] = (hsv[1] * 0.85f).coerceIn(0.25f, 0.6f)
+        hsv[2] = value
+        return Color.HSVToColor(hsv)
     }
 }
