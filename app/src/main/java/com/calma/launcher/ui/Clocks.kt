@@ -37,13 +37,16 @@ import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.ExperimentalTextApi
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import com.calma.launcher.data.Dates
 import com.calma.launcher.data.DeviceInfo
@@ -132,16 +135,31 @@ private fun EchoClock(d: Dates, enter: () -> Float, onClock: () -> Unit, onDate:
     }
 }
 
-/** El mes grande con dos "ecos" que aparecen en cascada y se desvanecen. */
+/** El mes grande con dos "ecos" que aparecen en cascada y se desvanecen. Siempre cabe en la pantalla. */
+@OptIn(ExperimentalTextApi::class)
 @Composable
 fun EchoMonth(text: String, enter: () -> Float, modifier: Modifier = Modifier) {
     BoxWithConstraints(modifier.fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
         val density = LocalDensity.current
-        val avail = maxWidth.value * 0.84f
-        val sizeDp = (avail / (text.length.coerceAtLeast(3) * 0.47f)).coerceIn(44f, 90f)
+        val measurer = rememberTextMeasurer()
+        val base = 100.sp
+        val spacing = 0.03.em
+        // Mide el mes con la letra real y lo ajusta al 88% del ancho disponible
+        val measured = remember(text, measurer) {
+            measurer.measure(
+                AnnotatedString(text),
+                style = TextStyle(fontFamily = Condensed, fontSize = base, letterSpacing = spacing),
+                softWrap = false,
+                maxLines = 1,
+            ).size.width
+        }
+        val avail = constraints.maxWidth * 0.88f
+        val maxSp = with(density) { 92.dp.toSp() }.value
+        val fitSp = if (measured > 0) base.value * avail / measured else maxSp
+        val fontSize = fitSp.coerceAtMost(maxSp).sp
+        val sizeDp = with(density) { fontSize.toDp() }.value
         val step = sizeDp * 0.74f
-        val fontSize = with(density) { sizeDp.dp.toSp() }
-        Box(Modifier.fillMaxWidth().height((sizeDp * 1.12f + step * 2).dp)) {
+        Box(Modifier.fillMaxWidth().height((sizeDp * 1.2f + step * 2).dp)) {
             for (i in 2 downTo 0) {
                 val alpha = when (i) { 0 -> 1f; 1 -> 0.42f; else -> 0.2f }
                 var m = Modifier
@@ -164,8 +182,8 @@ fun EchoMonth(text: String, enter: () -> Float, modifier: Modifier = Modifier) {
                     color = Color.White.copy(alpha = alpha),
                     fontFamily = Condensed,
                     fontSize = fontSize,
-                    lineHeight = fontSize,
-                    letterSpacing = (sizeDp * 0.03f).sp,
+                    lineHeight = fontSize * 1.15f,
+                    letterSpacing = spacing,
                     maxLines = 1,
                     softWrap = false,
                     modifier = m,

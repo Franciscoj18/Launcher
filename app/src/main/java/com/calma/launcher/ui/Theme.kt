@@ -22,8 +22,8 @@ val Poppins = FontFamily(
     Font(R.font.poppins_bold, FontWeight.Bold),
 )
 
-/** Roboto Condensed del sistema: la letra alta y delgada del mes. */
-val Condensed = FontFamily(android.graphics.Typeface.create("sans-serif-condensed-light", android.graphics.Typeface.NORMAL))
+/** Oswald: la letra alta y delgada del mes (incluida en Calma, igual en todos los teléfonos). */
+val Condensed = FontFamily(Font(R.font.oswald_light, FontWeight.Light))
 
 /** Color de acento elegido en Ajustes (o sacado del fondo en modo automático). */
 val Accent: Color

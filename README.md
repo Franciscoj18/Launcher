@@ -9,4 +9,4 @@ Launcher minimalista para Moto G9 Play, inspirado en un "clean setup":
 
 El APK se compila solo con GitHub Actions y aparece en *Releases*.
 
-Fuente Poppins bajo licencia SIL OFL 1.1 (ver `licenses/`).
+Fuentes Poppins y Oswald bajo licencia SIL OFL 1.1 (ver `licenses/`).
