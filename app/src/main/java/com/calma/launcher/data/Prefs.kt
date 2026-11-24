@@ -107,6 +107,18 @@ object Prefs {
     var panelButtons by mutableStateOf("wifi,data,bt,torch,rotate,dnd,shot,lock")
         private set
 
+    // Isla dinámica
+    var islandEnabled by mutableStateOf(true)
+        private set
+    var islandFeatures by mutableStateOf("music,charge,code,nav,ride,progress,privacy,timer,call,sound,phones,event")
+        private set
+    var islandIdle by mutableStateOf(false)          // pastilla visible aunque no haya nada
+        private set
+    var islandHideLandscape by mutableStateOf(true)
+        private set
+    var islandY by mutableStateOf(0)                 // ajuste vertical en dp
+        private set
+
     // Pronóstico de 7 días: "fecha,codigo,max,min;..."
     var forecast by mutableStateOf("")
         private set
@@ -153,6 +165,11 @@ object Prefs {
         panelSide = sp.getString("panelSide", "right") ?: "right"
         panelHome = sp.getBoolean("panelHome", true)
         panelButtons = sp.getString("panelButtons", "wifi,data,bt,torch,rotate,dnd,shot,lock") ?: ""
+        islandEnabled = sp.getBoolean("islandEnabled", true)
+        islandFeatures = sp.getString("islandFeatures", islandFeatures) ?: islandFeatures
+        islandIdle = sp.getBoolean("islandIdle", false)
+        islandHideLandscape = sp.getBoolean("islandHideLandscape", true)
+        islandY = sp.getInt("islandY", 0)
         forecast = sp.getString("forecast", "") ?: ""
     }
 
@@ -181,6 +198,16 @@ object Prefs {
         if (!cur.remove(key)) cur.add(key)
         panelButtons = all.filter { it in cur }.joinToString(",")
         sp.edit().putString("panelButtons", panelButtons).apply()
+    }
+    fun setIslandEnabledValue(v: Boolean) { islandEnabled = v; sp.edit().putBoolean("islandEnabled", v).apply() }
+    fun setIslandIdleValue(v: Boolean) { islandIdle = v; sp.edit().putBoolean("islandIdle", v).apply() }
+    fun setIslandHideLandscapeValue(v: Boolean) { islandHideLandscape = v; sp.edit().putBoolean("islandHideLandscape", v).apply() }
+    fun setIslandYValue(v: Int) { islandY = v; sp.edit().putInt("islandY", v).apply() }
+    fun toggleIslandFeature(key: String) {
+        val cur = islandFeatures.split(",").filter { it.isNotBlank() }.toMutableSet()
+        if (!cur.remove(key)) cur.add(key)
+        islandFeatures = cur.joinToString(",")
+        sp.edit().putString("islandFeatures", islandFeatures).apply()
     }
     fun setMusicTintValue(v: Boolean) { musicTint = v; sp.edit().putBoolean("musicTint", v).apply() }
     fun setForecastValue(v: String) { forecast = v; sp.edit().putString("forecast", v).apply() }

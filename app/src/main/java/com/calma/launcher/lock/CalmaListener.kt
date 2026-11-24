@@ -20,6 +20,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
 import androidx.core.app.NotificationManagerCompat
 import com.calma.launcher.data.Colors
+import com.calma.launcher.island.Island
 
 class NotifEntry(val pkg: String, val icon: Icon?, val count: Int)
 
@@ -57,6 +58,22 @@ object Live {
         internal set
     var art by mutableStateOf<Bitmap?>(null)
         internal set
+    /** Posición de la canción: ms en [positionTime] (reloj elapsedRealtime), y duración. */
+    var positionMs by mutableStateOf(0L)
+        internal set
+    var positionTime by mutableStateOf(0L)
+        internal set
+    var speed by mutableStateOf(1f)
+        internal set
+    var durationMs by mutableStateOf(0L)
+        internal set
+
+    /** Posición estimada ahora mismo. */
+    fun currentPosition(): Long {
+        if (!playing || positionTime == 0L) return positionMs
+        val elapsed = android.os.SystemClock.elapsedRealtime() - positionTime
+        return (positionMs + elapsed * speed).toLong().coerceIn(0L, if (durationMs > 0) durationMs else Long.MAX_VALUE)
+    }
     internal var controller: MediaController? = null
     internal var service: CalmaListener? = null
 
@@ -127,7 +144,10 @@ class CalmaListener : NotificationListenerService() {
         super.onListenerDisconnected()
     }
 
-    override fun onNotificationPosted(sbn: StatusBarNotification?) = refreshNotifs()
+    override fun onNotificationPosted(sbn: StatusBarNotification?) {
+        refreshNotifs()
+        if (sbn != null) try { Island.onPosted(this, sbn) } catch (_: Exception) {}
+    }
     override fun onNotificationRemoved(sbn: StatusBarNotification?) = refreshNotifs()
 
     private fun pickController(list: List<MediaController>) {
@@ -159,6 +179,11 @@ class CalmaListener : NotificationListenerService() {
             ?: md?.getString(MediaMetadata.METADATA_KEY_ALBUM_ARTIST)
             ?: md?.getString(MediaMetadata.METADATA_KEY_DISPLAY_SUBTITLE)
             ?: ""
+        val ps = c.playbackState
+        Live.positionMs = ps?.position ?: 0L
+        Live.positionTime = ps?.lastPositionUpdateTime ?: 0L
+        Live.speed = ps?.playbackSpeed?.takeIf { it > 0f } ?: 1f
+        Live.durationMs = md?.getLong(MediaMetadata.METADATA_KEY_DURATION) ?: 0L
         val st = c.playbackState?.state
         Live.hasMedia = !t.isNullOrBlank() && st != null && st != PlaybackState.STATE_NONE &&
             st != PlaybackState.STATE_STOPPED && st != PlaybackState.STATE_ERROR
@@ -215,6 +240,7 @@ class CalmaListener : NotificationListenerService() {
             NotifEntry(pkg, items.last().notification.smallIcon, items.size)
         }.take(6)
         val sorted = details.sortedByDescending { it.time }.take(20)
+        try { Island.classify(this, list) } catch (_: Exception) {}
         main.post {
             Live.notifs = entries
             Live.items = sorted

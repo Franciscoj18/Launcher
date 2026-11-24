@@ -6,6 +6,7 @@ import android.app.KeyguardManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.content.res.Configuration
 import android.graphics.PixelFormat
 import android.os.Handler
 import android.os.Looper
@@ -28,6 +29,8 @@ import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.calma.launcher.data.HomeWallpaper
 import com.calma.launcher.data.Prefs
+import com.calma.launcher.island.Island
+import com.calma.launcher.island.IslandController
 import com.calma.launcher.ui.CalmaTheme
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.cancel
@@ -57,6 +60,7 @@ class PanelService : AccessibilityService(), PanelHost {
     private var panelRoot: FrameLayout? = null
     private var owner: OverlayOwner? = null
     private val visible = mutableStateOf(false)
+    private var island: IslandController? = null
 
     override val hostContext: Context get() = this
 
@@ -65,6 +69,8 @@ class PanelService : AccessibilityService(), PanelHost {
         instance = this
         wm = getSystemService(WindowManager::class.java)
         addTrigger()
+        refreshIsland()
+        Island.landscape = resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
         scope.launch {
             HomeWallpaper.load(applicationContext)
             HomeWallpaper.refreshAccent(applicationContext)
@@ -74,7 +80,23 @@ class PanelService : AccessibilityService(), PanelHost {
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {}
     override fun onInterrupt() {}
 
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        Island.landscape = newConfig.orientation == Configuration.ORIENTATION_LANDSCAPE
+    }
+
+    /** Enciende, apaga o recoloca la isla dinámica según los ajustes. */
+    fun refreshIsland() {
+        island?.detach()
+        island = null
+        if (Prefs.islandEnabled) {
+            island = IslandController(this).also { it.attach() }
+        }
+    }
+
     override fun onDestroy() {
+        island?.detach()
+        island = null
         removeTrigger()
         removePanel()
         instance = null
@@ -168,6 +190,7 @@ class PanelService : AccessibilityService(), PanelHost {
         try {
             wm.addView(root, lp)
             panelRoot = root
+            Island.panelOpen = true
             root.requestFocus()
             main.post { visible.value = true }
         } catch (e: Exception) {
@@ -191,6 +214,7 @@ class PanelService : AccessibilityService(), PanelHost {
         owner?.stop()
         owner = null
         visible.value = false
+        Island.panelOpen = false
     }
 
     override fun launch(intent: Intent) {

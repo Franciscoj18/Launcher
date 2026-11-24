@@ -72,6 +72,9 @@ import com.calma.launcher.lock.Live
 import com.calma.launcher.lock.LockActivity
 import com.calma.launcher.lock.LockService
 import com.calma.launcher.panel.PanelService
+import com.calma.launcher.island.AlertKind
+import com.calma.launcher.island.Island
+import com.calma.launcher.island.IslandAlert
 import com.calma.launcher.ui.Accent
 import com.calma.launcher.ui.AccentChoices
 import com.calma.launcher.ui.PanelSurface
@@ -384,6 +387,56 @@ private fun SettingsScreen(resumeTick: Int) {
             val on = Prefs.panelButtons.split(",").toSet()
             for ((key, name) in names) {
                 SwitchLine(name, key in on) { Prefs.togglePanelButton(key) }
+            }
+        }
+
+        // ---------- Isla dinámica ----------
+        Card {
+            Title("Isla dinámica")
+            Body("Una pastilla negra alrededor de la cámara que muestra música, carga, códigos, Maps, pedidos, descargas, llamadas y más. Tócala para agrandarla; mantenla presionada para abrir el panel.")
+            if (!panelEnabled) {
+                Body("⚠ Funciona con el mismo permiso de accesibilidad del panel de controles. Actívalo arriba.")
+            }
+            if (!hasNotifAccess) {
+                Body("⚠ Para música, códigos, Maps y pedidos necesita también el acceso a notificaciones.")
+            }
+            SwitchLine("Activar la isla", Prefs.islandEnabled) {
+                Prefs.setIslandEnabledValue(it)
+                PanelService.instance?.refreshIsland()
+            }
+            SwitchLine("Mostrar la pastilla aunque no haya nada", Prefs.islandIdle) { Prefs.setIslandIdleValue(it) }
+            SwitchLine("Ocultar con el teléfono en horizontal", Prefs.islandHideLandscape) { Prefs.setIslandHideLandscapeValue(it) }
+            Label("Ajustar altura: ${if (Prefs.islandY > 0) "+" else ""}${Prefs.islandY} dp")
+            Slider(
+                value = Prefs.islandY.toFloat(),
+                onValueChange = { Prefs.setIslandYValue(it.roundToInt()) },
+                onValueChangeFinished = { PanelService.instance?.refreshIsland() },
+                valueRange = -20f..40f,
+                colors = SliderDefaults.colors(thumbColor = Color.White, activeTrackColor = Accent),
+            )
+            Spacer(Modifier.height(6.dp))
+            Label("Qué muestra")
+            val islandOn = Prefs.islandFeatures.split(",").toSet()
+            val islandNames = listOf(
+                "music" to "Música",
+                "charge" to "Carga",
+                "code" to "Códigos de verificación (con copiar)",
+                "nav" to "Navegación de Maps",
+                "ride" to "Pedidos y viajes (DiDi, Uber, Rappi)",
+                "progress" to "Descargas y envíos",
+                "privacy" to "Aviso de cámara y micrófono",
+                "timer" to "Temporizador y cronómetro",
+                "call" to "Llamadas",
+                "sound" to "Cambio de sonido / vibrar / silencio",
+                "phones" to "Audífonos conectados",
+                "event" to "Eventos 10 min antes",
+                "msg" to "Mensajes (Android ya los avisa)",
+            )
+            for ((key, name) in islandNames) {
+                SwitchLine(name, key in islandOn) { Prefs.toggleIslandFeature(key) }
+            }
+            Button("Probar la isla") {
+                Island.show(IslandAlert(AlertKind.CHARGING, "Calma", "La isla funciona ✓", level = DeviceInfo.battery, durationMs = 3500))
             }
         }
 
