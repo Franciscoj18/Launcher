@@ -69,14 +69,8 @@ class MainActivity : ComponentActivity(), PanelHost {
         private set
 
     private val calendarPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) {
-        val t = System.currentTimeMillis()
-        if (t - lastCalendar > 120_000L) {
-            lastCalendar = t
-            lifecycleScope.launch { DeviceInfo.refreshCalendar(this@MainActivity) }
-        }
+        lifecycleScope.launch { DeviceInfo.refreshCalendar(this@MainActivity) }
     }
-
-    private var lastCalendar = 0L
 
     private var pendingId = -1
     private var pendingInfo: AppWidgetProviderInfo? = null
