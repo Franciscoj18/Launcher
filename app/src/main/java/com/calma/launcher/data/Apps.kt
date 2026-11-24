@@ -83,6 +83,7 @@ object Apps {
                 IconLoader.clear()
                 ensureDefaultDock()
                 fixDock()
+                warmIcons()
             }
         }
     }
@@ -126,6 +127,27 @@ object Apps {
             }
         }
         if (changed) Prefs.saveDock(fixed)
+    }
+
+    private val iconWorker = Executors.newSingleThreadExecutor { r ->
+        Thread {
+            android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_BACKGROUND)
+            r.run()
+        }.apply { name = "calma-iconos" }
+    }
+
+    /** Prepara los íconos de inicio y del cajón antes de que los veas (sin trabar la pantalla). */
+    fun warmIcons() {
+        val snapshot = list
+        val dockKeys = Prefs.dock.toSet()
+        val style = Prefs.iconStyle
+        val pack = Prefs.iconPack
+        val ordered = snapshot.filter { it.key in dockKeys } + snapshot.filter { it.key !in dockKeys }
+        iconWorker.execute {
+            for (e in ordered) {
+                try { IconLoader.load(appCtx, e, style, pack) } catch (_: Throwable) {}
+            }
+        }
     }
 
     fun launch(ctx: Context, e: AppEntry, bounds: Rect? = null) {

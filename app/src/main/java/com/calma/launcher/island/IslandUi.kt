@@ -93,6 +93,7 @@ import com.calma.launcher.data.Prefs
 import com.calma.launcher.lock.Live
 import com.calma.launcher.ui.Accent
 import com.calma.launcher.ui.Poppins
+import com.calma.launcher.ui.rememberIconBitmap
 import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
 
@@ -107,13 +108,6 @@ fun IslandUi(ctl: IslandController) {
     val ctx = LocalContext.current
     var expandedState by remember { mutableStateOf(false) }
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
-
-    LaunchedEffect(Unit) {
-        while (true) {
-            delay(1000)
-            now = System.currentTimeMillis()
-        }
-    }
     LaunchedEffect(Island.outsideTaps) { expandedState = false }
     LaunchedEffect(expandedState) {
         if (expandedState) {
@@ -127,9 +121,21 @@ fun IslandUi(ctl: IslandController) {
     val music = Island.has("music") && Live.hasMedia
     val dots = Island.has("privacy") && (Island.camera || Island.mic)
     val hidden = !Prefs.islandEnabled || Island.panelOpen || (Island.landscape && Prefs.islandHideLandscape)
-    val locked = Island.locked(ctx)
+    val locked = if (alert != null) Island.locked(ctx) else false
 
     val expanded = expandedState && (item != null || music)
+
+    // El reloj interno solo corre si hay algo que cuente segundos (llamada, temporizador o música agrandada)
+    val needsTick = !hidden && (
+        (item != null && item.chronoBase > 0 && (item.kind == Kind.CALL || item.kind == Kind.TIMER)) ||
+            (expanded && item == null && music)
+        )
+    LaunchedEffect(needsTick) {
+        while (needsTick) {
+            now = System.currentTimeMillis()
+            delay(1000L - (System.currentTimeMillis() % 1000L))
+        }
+    }
 
     val showSomething = !hidden && (alert != null || item != null || music || dots || Prefs.islandIdle)
 
@@ -145,10 +151,12 @@ fun IslandUi(ctl: IslandController) {
         // 1) La ventana crece de una vez al tamaño más grande que se va a necesitar
         ctl.setWindowSize(max(tw, w.value).roundToInt(), max(th, h.value).roundToInt())
         // 2) La forma negra se anima dentro de la ventana
-        val spec = spring<Float>(dampingRatio = 0.78f, stiffness = 380f)
+        val growing = tw * th >= w.value * h.value
+        val spec = if (growing) spring<Float>(dampingRatio = 0.74f, stiffness = 520f)
+        else spring(dampingRatio = 1f, stiffness = 420f)
         coroutineScope {
-            launch { w.animateTo(tw, spec) }
-            launch { h.animateTo(th, spec) }
+            launch { w.animateTo(tw, spec, initialVelocity = w.velocity) }
+            launch { h.animateTo(th, spec, initialVelocity = h.velocity) }
         }
         // 3) Al terminar, la ventana queda justo del tamaño final
         ctl.setWindowSize(tw.roundToInt(), th.roundToInt())
@@ -517,23 +525,27 @@ private fun MusicArt(size: Dp) {
     }
 }
 
-/** Barritas que bailan mientras suena la música. */
+/** Barritas de la música: se mueven ~8 veces por segundo (ligero) y solo mientras suena. */
 @Composable
 private fun Equalizer() {
-    val t = rememberInfiniteTransition(label = "eq")
     val playing = Live.playing
     val color = Live.musicColor ?: Accent
-    val h = listOf(
-        t.animateFloat(0.3f, 1f, infiniteRepeatable(tween(420), RepeatMode.Reverse), label = "a"),
-        t.animateFloat(0.8f, 0.25f, infiniteRepeatable(tween(360), RepeatMode.Reverse), label = "b"),
-        t.animateFloat(0.4f, 0.95f, infiniteRepeatable(tween(500), RepeatMode.Reverse), label = "c"),
-        t.animateFloat(0.9f, 0.35f, infiniteRepeatable(tween(300), RepeatMode.Reverse), label = "d"),
-    )
+    var bars by remember { mutableStateOf(floatArrayOf(0.3f, 0.6f, 0.4f, 0.7f)) }
+    LaunchedEffect(playing) {
+        if (!playing) {
+            bars = floatArrayOf(0.2f, 0.2f, 0.2f, 0.2f)
+            return@LaunchedEffect
+        }
+        val rnd = java.util.Random()
+        while (true) {
+            bars = FloatArray(4) { 0.25f + rnd.nextFloat() * 0.75f }
+            delay(125)
+        }
+    }
     Canvas(Modifier.size(width = 20.dp, height = 16.dp)) {
         val w = size.width / 7f
         for (i in 0 until 4) {
-            val v = if (playing) h[i].value else 0.2f
-            val bh = size.height * v
+            val bh = size.height * bars[i]
             val x = w * (i * 2) + w / 2
             drawLine(color, Offset(x, size.height), Offset(x, size.height - bh), strokeWidth = w, cap = StrokeCap.Round)
         }
@@ -543,15 +555,13 @@ private fun Equalizer() {
 @Composable
 private fun Ring(progress: Float, size: Dp) {
     val color = Accent
-    val t = rememberInfiniteTransition(label = "ring")
-    val spin by t.animateFloat(0f, 360f, infiniteRepeatable(tween(1100)), label = "spin")
     Canvas(Modifier.size(size)) {
         val sw = 2.5.dp.toPx()
         drawCircle(Color.White.copy(alpha = 0.2f), style = Stroke(sw))
         if (progress >= 0f) {
             drawArc(color, -90f, 360f * progress, false, style = Stroke(sw, cap = StrokeCap.Round))
         } else {
-            drawArc(color, spin, 90f, false, style = Stroke(sw, cap = StrokeCap.Round))
+            drawArc(color, -90f, 100f, false, style = Stroke(sw, cap = StrokeCap.Round))
         }
     }
 }
@@ -571,13 +581,5 @@ private fun AppGlyph(icon: Icon?, size: Dp) {
 }
 
 @Composable
-private fun rememberIcon(icon: Icon?, tint: Boolean): ImageBitmap? {
-    val ctx = LocalContext.current
-    return remember(icon, tint) {
-        try {
-            val d = icon?.loadDrawable(ctx) ?: return@remember null
-            if (tint) d.mutate().setTint(android.graphics.Color.WHITE)
-            d.toBitmap(64, 64).asImageBitmap()
-        } catch (e: Exception) { null }
-    }
-}
+private fun rememberIcon(icon: Icon?, tint: Boolean): ImageBitmap? =
+    if (icon == null) null else rememberIconBitmap(icon, tint, 64)

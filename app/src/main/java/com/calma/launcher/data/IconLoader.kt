@@ -24,7 +24,7 @@ import kotlin.math.min
  * 3) Si no, el ícono original.
  */
 object IconLoader {
-    private const val S = 144
+    private const val S = 112
     private val cache = LruCache<String, ImageBitmap>(400)
     private var pack: IconPack? = null
     private val lock = Any()

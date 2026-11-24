@@ -145,10 +145,26 @@ class CalmaListener : NotificationListenerService() {
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification?) {
-        refreshNotifs()
+        scheduleRefresh()
         if (sbn != null) try { Island.onPosted(this, sbn) } catch (_: Exception) {}
     }
-    override fun onNotificationRemoved(sbn: StatusBarNotification?) = refreshNotifs()
+
+    // Maps, descargas y otras apps actualizan su notificación muchas veces por segundo:
+    // juntamos esos cambios y revisamos como máximo cada 300 ms.
+    private val refreshTask = Runnable { try { refreshNotifs() } catch (_: Exception) {} }
+    private val worker = java.util.concurrent.Executors.newSingleThreadExecutor()
+    private var refreshPending = false
+
+    private fun scheduleRefresh() {
+        if (refreshPending) return
+        refreshPending = true
+        main.postDelayed({
+            refreshPending = false
+            // Se arma la lista fuera del hilo principal para que nada se trabe
+            worker.execute(refreshTask)
+        }, 300)
+    }
+    override fun onNotificationRemoved(sbn: StatusBarNotification?) = scheduleRefresh()
 
     private fun pickController(list: List<MediaController>) {
         val playingOne = list.firstOrNull { it.playbackState?.state == PlaybackState.STATE_PLAYING } ?: list.firstOrNull()

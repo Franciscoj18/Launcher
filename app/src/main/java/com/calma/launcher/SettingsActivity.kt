@@ -207,16 +207,16 @@ private fun SettingsScreen(resumeTick: Int) {
             Choices(
                 options = listOf("mono" to "Blancos", "original" to "Originales"),
                 selected = Prefs.iconStyle,
-                onSelect = { Prefs.setIconStyleValue(it); IconLoader.clear() },
+                onSelect = { Prefs.setIconStyleValue(it); IconLoader.clear(); com.calma.launcher.data.Apps.warmIcons() },
             )
             Spacer(Modifier.height(12.dp))
             Label("Paquete de íconos")
             Body("Para que se vean idénticos al video, instala un paquete de íconos blancos como \"Whicons\" (gratis) y elígelo aquí.")
             RadioLine("Ninguno (convertir automáticamente)", Prefs.iconPack.isEmpty()) {
-                Prefs.setIconPackValue(""); IconLoader.clear()
+                Prefs.setIconPackValue(""); IconLoader.clear(); com.calma.launcher.data.Apps.warmIcons()
             }
             for ((pkg, name) in packs) {
-                RadioLine(name, Prefs.iconPack == pkg) { Prefs.setIconPackValue(pkg); IconLoader.clear() }
+                RadioLine(name, Prefs.iconPack == pkg) { Prefs.setIconPackValue(pkg); IconLoader.clear(); com.calma.launcher.data.Apps.warmIcons() }
             }
             Button("Buscar Whicons en Play Store") {
                 open(ctx, Intent(Intent.ACTION_VIEW, Uri.parse("market://search?q=whicons&c=apps")))

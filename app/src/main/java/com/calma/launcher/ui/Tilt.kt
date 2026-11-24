@@ -52,8 +52,11 @@ class Tilt(ctx: Context) : SensorEventListener {
         // La base sigue lentamente la postura, así el fondo vuelve al centro
         baseX += (fx - baseX) * 0.015f
         baseY += (fy - baseY) * 0.015f
-        x.floatValue = ((fx - baseX) / 2.5f).coerceIn(-1f, 1f)
-        y.floatValue = ((fy - baseY) / 2.5f).coerceIn(-1f, 1f)
+        val nx = ((fx - baseX) / 2.5f).coerceIn(-1f, 1f)
+        val ny = ((fy - baseY) / 2.5f).coerceIn(-1f, 1f)
+        // Solo se mueve el fondo si el cambio se nota (evita redibujar sin parar)
+        if (kotlin.math.abs(nx - x.floatValue) > 0.004f) x.floatValue = nx
+        if (kotlin.math.abs(ny - y.floatValue) > 0.004f) y.floatValue = ny
     }
 
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}

@@ -12,8 +12,8 @@ android {
         applicationId = "com.calma.launcher"
         minSdk = 29          // Android 10 (Moto G9 Play)
         targetSdk = 34
-        versionCode = 7
-        versionName = "1.4.1"
+        versionCode = 8
+        versionName = "1.5"
     }
 
     signingConfigs {
@@ -77,4 +77,6 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.5")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.5")
     implementation("androidx.savedstate:savedstate-ktx:1.2.1")
+    // Instala los perfiles de rendimiento de Compose aunque la app no venga de Play Store
+    implementation("androidx.profileinstaller:profileinstaller:1.3.1")
 }

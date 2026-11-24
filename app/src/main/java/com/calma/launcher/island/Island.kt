@@ -73,10 +73,10 @@ object Island {
 
     private val main = Handler(Looper.getMainLooper())
     private var hideTask: Runnable? = null
-    private val labels = HashMap<String, String>()
+    private val labels = java.util.concurrent.ConcurrentHashMap<String, String>()
     private var lastCode = ""
     private var lastCodeTime = 0L
-    private val lastMessage = HashMap<String, String>()
+    private val lastMessage = java.util.concurrent.ConcurrentHashMap<String, String>()
 
     fun has(feature: String): Boolean = Prefs.islandEnabled && feature in Prefs.islandFeatures.split(",")
 

@@ -69,8 +69,14 @@ class MainActivity : ComponentActivity(), PanelHost {
         private set
 
     private val calendarPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) {
-        lifecycleScope.launch { DeviceInfo.refreshCalendar(this@MainActivity) }
+        val t = System.currentTimeMillis()
+        if (t - lastCalendar > 120_000L) {
+            lastCalendar = t
+            lifecycleScope.launch { DeviceInfo.refreshCalendar(this@MainActivity) }
+        }
     }
+
+    private var lastCalendar = 0L
 
     private var pendingId = -1
     private var pendingInfo: AppWidgetProviderInfo? = null
@@ -135,8 +141,14 @@ class MainActivity : ComponentActivity(), PanelHost {
             if (Prefs.parallax && Prefs.homeImage.isNotEmpty()) tilt.start() else tilt.stop()
         }
         lifecycleScope.launch { Weather.refreshIfStale() }
-        lifecycleScope.launch { DeviceInfo.refreshCalendar(this@MainActivity) }
+        val t = System.currentTimeMillis()
+        if (t - lastCalendar > 120_000L) {
+            lastCalendar = t
+            lifecycleScope.launch { DeviceInfo.refreshCalendar(this@MainActivity) }
+        }
     }
+
+    private var lastCalendar = 0L
 
     override fun onPause() {
         super.onPause()
@@ -148,11 +160,16 @@ class MainActivity : ComponentActivity(), PanelHost {
     }
 
     /** Mueve el fondo del sistema al pasar de pantalla (si es más ancho que la pantalla). */
+    private var wallpaperSteps = false
     fun setWallpaperScroll(fraction: Float) {
+        if (Prefs.homeImage.isNotEmpty()) return
         val token = window?.decorView?.windowToken ?: return
         try {
             val wm = WallpaperManager.getInstance(this)
-            wm.setWallpaperOffsetSteps(0.5f, 0f)
+            if (!wallpaperSteps) {
+                wm.setWallpaperOffsetSteps(0.5f, 0f)
+                wallpaperSteps = true
+            }
             wm.setWallpaperOffsets(token, fraction.coerceIn(0f, 1f), 0.5f)
         } catch (_: Exception) {}
     }

@@ -118,17 +118,8 @@ fun RoundButton(icon: ImageVector, size: Dp, filled: Boolean, onClick: () -> Uni
 
 @Composable
 fun NotifCard(n: NotifItem, es: Boolean, onOpen: () -> Unit, onDismiss: () -> Unit) {
-    val ctx = LocalContext.current
-    val avatar = remember(n.key, n.largeIcon) {
-        try { n.largeIcon?.loadDrawable(ctx)?.toBitmap(96, 96)?.asImageBitmap() } catch (e: Exception) { null }
-    }
-    val small = remember(n.key, n.smallIcon) {
-        try {
-            val d = n.smallIcon?.loadDrawable(ctx) ?: ctx.packageManager.getApplicationIcon(n.pkg)
-            d.mutate().setTint(android.graphics.Color.WHITE)
-            d.toBitmap(48, 48).asImageBitmap()
-        } catch (e: Exception) { null }
-    }
+    val avatar = if (n.largeIcon != null) rememberIconBitmap(n.largeIcon, tint = false, size = 96) else null
+    val small = rememberIconBitmap(n.smallIcon, tint = true, size = 48, fallbackPkg = n.pkg)
     val showContent = Prefs.lockContent
     Row(
         Modifier

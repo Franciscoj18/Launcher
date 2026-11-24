@@ -90,11 +90,7 @@ fun AppDrawer(pickMode: Boolean, onDismiss: () -> Unit, onChoose: (AppEntry) -> 
             .sortedBy { if (it.search.startsWith(q)) 0 else 1 }
     }
 
-    LaunchedEffect(Unit) {
-        delay(200)
-        try { focus.requestFocus() } catch (_: Exception) {}
-        keyboard?.show()
-    }
+    // El teclado ya no se abre solo: aparece cuando tocas el buscador
 
     // Deslizar hacia abajo estando arriba de la lista cierra el cajón
     val pull = remember {

@@ -110,7 +110,7 @@ object Prefs {
     // Isla dinámica
     var islandEnabled by mutableStateOf(true)
         private set
-    var islandFeatures by mutableStateOf("music,charge,code,nav,ride,progress,privacy,timer,call,sound,phones,event")
+    var islandFeatures by mutableStateOf("music,charge,code,nav,ride,progress,privacy,timer,call")
         private set
     var islandIdle by mutableStateOf(false)          // pastilla visible aunque no haya nada
         private set
@@ -167,6 +167,11 @@ object Prefs {
         panelButtons = sp.getString("panelButtons", "wifi,data,bt,torch,rotate,dnd,shot,lock") ?: ""
         islandEnabled = sp.getBoolean("islandEnabled", true)
         islandFeatures = sp.getString("islandFeatures", islandFeatures) ?: islandFeatures
+        if (!sp.getBoolean("islandOpt15", false)) {
+            // Versión 1.5: se retiran por defecto los avisos que gastan más de lo que aportan
+            islandFeatures = islandFeatures.split(",").filter { it.isNotBlank() && it !in setOf("sound", "phones", "event") }.joinToString(",")
+            sp.edit().putString("islandFeatures", islandFeatures).putBoolean("islandOpt15", true).apply()
+        }
         islandIdle = sp.getBoolean("islandIdle", false)
         islandHideLandscape = sp.getBoolean("islandHideLandscape", true)
         islandY = sp.getInt("islandY", 0)

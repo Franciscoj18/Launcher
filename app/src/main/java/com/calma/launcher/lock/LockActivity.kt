@@ -101,6 +101,7 @@ import com.calma.launcher.data.Weather
 import com.calma.launcher.ui.Accent
 import com.calma.launcher.ui.CardFill
 import com.calma.launcher.ui.MusicCard
+import com.calma.launcher.ui.rememberIconBitmap
 import com.calma.launcher.ui.NotifCard
 import com.calma.launcher.ui.CalmaTheme
 import com.calma.launcher.ui.Poppins
@@ -558,14 +559,7 @@ private fun NotifIcons(list: List<NotifEntry>, total: Int) {
 
 @Composable
 private fun NotifIcon(n: NotifEntry) {
-    val ctx = LocalContext.current
-    val img = remember(n.pkg, n.icon) {
-        try {
-            val d = n.icon?.loadDrawable(ctx) ?: ctx.packageManager.getApplicationIcon(n.pkg)
-            d.mutate().setTint(android.graphics.Color.WHITE)
-            d.toBitmap(48, 48).asImageBitmap()
-        } catch (e: Exception) { null }
-    }
+    val img = rememberIconBitmap(n.icon, tint = true, size = 48, fallbackPkg = n.pkg)
     Box {
         if (img != null) {
             Image(img, contentDescription = null, modifier = Modifier.size(15.dp))

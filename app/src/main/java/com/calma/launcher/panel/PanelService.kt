@@ -19,6 +19,7 @@ import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
 import android.widget.FrameLayout
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
@@ -70,6 +71,8 @@ class PanelService : AccessibilityService(), PanelHost {
         wm = getSystemService(WindowManager::class.java)
         addTrigger()
         refreshIsland()
+        // Prepara el panel en segundo plano para que la primera vez también abra rápido
+        main.postDelayed({ ensurePanelWindow() }, 2000)
         Island.landscape = resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
         scope.launch {
             HomeWallpaper.load(applicationContext)
@@ -149,10 +152,20 @@ class PanelService : AccessibilityService(), PanelHost {
         trigger = null
     }
 
-    fun showPanel() {
-        if (panelRoot != null) return
+    // El panel se crea una sola vez y luego solo se muestra u oculta: así abre al instante.
+    private var panelLp: WindowManager.LayoutParams? = null
+    private var shown = false
+
+    private val shownFlags = WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+        WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
+        WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED
+    private val hiddenFlags = shownFlags or
+        WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+        WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+
+    private fun ensurePanelWindow(): FrameLayout? {
+        panelRoot?.let { return it }
         val o = OverlayOwner().also { it.start() }
-        owner = o
         val root = object : FrameLayout(this) {
             override fun dispatchKeyEvent(event: KeyEvent): Boolean {
                 if (event.keyCode == KeyEvent.KEYCODE_BACK) {
@@ -169,8 +182,8 @@ class PanelService : AccessibilityService(), PanelHost {
                 CalmaTheme {
                     AnimatedVisibility(
                         visible = visible.value,
-                        enter = slideInVertically { -it / 4 } + fadeIn(),
-                        exit = slideOutVertically { -it / 4 } + fadeOut(),
+                        enter = slideInVertically(tween(260)) { -it / 5 } + fadeIn(tween(200)),
+                        exit = slideOutVertically(tween(220)) { -it / 5 } + fadeOut(tween(180)),
                     ) {
                         ControlPanel(host = this@PanelService)
                     }
@@ -178,39 +191,63 @@ class PanelService : AccessibilityService(), PanelHost {
             }
         }
         root.addView(compose, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+        root.visibility = View.GONE
         val lp = WindowManager.LayoutParams(
             WindowManager.LayoutParams.MATCH_PARENT,
             WindowManager.LayoutParams.MATCH_PARENT,
             WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
-            WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
-                WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED,
+            hiddenFlags,
             PixelFormat.TRANSLUCENT,
         )
-        try {
+        return try {
             wm.addView(root, lp)
             panelRoot = root
-            Island.panelOpen = true
-            root.requestFocus()
-            main.post { visible.value = true }
+            panelLp = lp
+            owner = o
+            root
         } catch (e: Exception) {
             o.stop()
-            owner = null
+            null
         }
     }
 
+    fun showPanel() {
+        if (shown) return
+        val root = ensurePanelWindow() ?: return
+        val lp = panelLp ?: return
+        shown = true
+        lp.flags = shownFlags
+        root.visibility = View.VISIBLE
+        try { wm.updateViewLayout(root, lp) } catch (_: Exception) {}
+        Island.panelOpen = true
+        root.requestFocus()
+        main.post { visible.value = true }
+    }
+
+    private fun hidePanelWindow() {
+        val root = panelRoot ?: return
+        val lp = panelLp ?: return
+        shown = false
+        root.visibility = View.GONE
+        lp.flags = hiddenFlags
+        try { wm.updateViewLayout(root, lp) } catch (_: Exception) {}
+        Island.panelOpen = false
+    }
+
     override fun closePanel(then: (() -> Unit)?) {
-        if (panelRoot == null) { then?.invoke(); return }
+        if (!shown) { then?.invoke(); return }
         visible.value = false
         main.postDelayed({
-            removePanel()
+            if (!visible.value) hidePanelWindow()
             then?.invoke()
-        }, 260)
+        }, 240)
     }
 
     private fun removePanel() {
         panelRoot?.let { try { wm.removeView(it) } catch (_: Exception) {} }
         panelRoot = null
+        panelLp = null
+        shown = false
         owner?.stop()
         owner = null
         visible.value = false
