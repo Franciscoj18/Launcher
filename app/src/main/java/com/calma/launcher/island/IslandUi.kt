@@ -1,7 +1,24 @@
 package com.calma.launcher.island
 
 import android.graphics.drawable.Icon
-import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.Animatable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.wrapContentSize
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.RoundRect
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Outline
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.LayoutDirection
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
+import kotlin.math.max
+import kotlin.math.min
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -115,45 +132,85 @@ fun IslandUi(ctl: IslandController) {
     val expanded = expandedState && (item != null || music)
 
     val showSomething = !hidden && (alert != null || item != null || music || dots || Prefs.islandIdle)
-    if (!showSomething) {
-        Box(Modifier.size(1.dp))
-        return
+
+    // ----- Tamaño animado de la forma negra (la ventana no se anima: solo cambia al empezar y al terminar) -----
+    val density = LocalDensity.current
+    val radiusMax = with(density) { 28.dp.toPx() }
+    val w = remember { Animatable(0f) }
+    val h = remember { Animatable(0f) }
+    var target by remember { mutableStateOf(IntSize.Zero) }
+    LaunchedEffect(target) {
+        val tw = target.width.toFloat()
+        val th = target.height.toFloat()
+        // 1) La ventana crece de una vez al tamaño más grande que se va a necesitar
+        ctl.setWindowSize(max(tw, w.value).roundToInt(), max(th, h.value).roundToInt())
+        // 2) La forma negra se anima dentro de la ventana
+        val spec = spring<Float>(dampingRatio = 0.78f, stiffness = 380f)
+        coroutineScope {
+            launch { w.animateTo(tw, spec) }
+            launch { h.animateTo(th, spec) }
+        }
+        // 3) Al terminar, la ventana queda justo del tamaño final
+        ctl.setWindowSize(tw.roundToInt(), th.roundToInt())
     }
 
-    val big = alert != null || expanded
-    val shape = if (big) RoundedCornerShape(28.dp) else RoundedCornerShape(50)
     Box(
         Modifier
-            .padding(top = 0.dp)
-            .animateContentSize(spring(dampingRatio = 0.72f, stiffness = 420f))
-            .clip(shape)
-            .background(Color.Black)
-            .combinedClickable(
-                onClick = {
-                    when {
-                        alert != null && alert.kind == AlertKind.CODE -> Unit
-                        alert != null -> {
-                            if (alert.intent != null || alert.pkg.isNotEmpty()) ctl.open(alert.intent, alert.pkg)
-                            Island.dismissAlert()
-                        }
-                        expanded -> {
-                            if (item != null) ctl.open(item.intent, item.pkg)
-                            else ctl.open(Live.playerIntent(), Live.playerPackage())
-                            expandedState = false
-                        }
-                        item != null || music -> expandedState = true
+            .fillMaxSize()
+            .graphicsLayer {
+                val ww = w.value
+                val hh = h.value
+                clip = true
+                shape = object : Shape {
+                    override fun createOutline(size: Size, layoutDirection: LayoutDirection, density: Density): Outline {
+                        val left = (size.width - ww) / 2f
+                        val r = min(hh / 2f, radiusMax)
+                        return Outline.Rounded(RoundRect(left, 0f, left + ww, hh, CornerRadius(r, r)))
                     }
-                },
-                onLongClick = { expandedState = false; ctl.openPanel() },
-            ),
+                }
+            }
+            .background(Color.Black)
     ) {
-        when {
-            alert != null -> AlertView(alert, g, locked, onCopy = { ctl.copy(it) })
-            expanded && item != null -> ExpandedItem(item, g, now)
-            expanded && music -> ExpandedMusic(g, now)
-            item != null -> Collapsed(g, dots, left = { ItemLeft(item) }, right = { ItemRight(item, now) })
-            music -> Collapsed(g, dots, left = { MusicArt(22.dp) }, right = { Equalizer() })
-            else -> Collapsed(g, dots, left = {}, right = {})
+        // El contenido se mide a su tamaño natural (aunque la ventana todavía sea chica)
+        Box(
+            Modifier
+                .align(Alignment.TopCenter)
+                .wrapContentSize(align = Alignment.TopCenter, unbounded = true)
+                .onSizeChanged { target = it }
+        ) {
+            if (showSomething) {
+                Box(
+                    Modifier.combinedClickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = {
+                            when {
+                                alert != null && alert.kind == AlertKind.CODE -> Unit
+                                alert != null -> {
+                                    if (alert.intent != null || alert.pkg.isNotEmpty()) ctl.open(alert.intent, alert.pkg)
+                                    Island.dismissAlert()
+                                }
+                                expanded -> {
+                                    if (item != null) ctl.open(item.intent, item.pkg)
+                                    else ctl.open(Live.playerIntent(), Live.playerPackage())
+                                    expandedState = false
+                                }
+                                item != null || music -> expandedState = true
+                            }
+                        },
+                        onLongClick = { expandedState = false; ctl.openPanel() },
+                    )
+                ) {
+                    when {
+                        alert != null -> AlertView(alert, g, locked, onCopy = { ctl.copy(it) })
+                        expanded && item != null -> ExpandedItem(item, g, now)
+                        expanded && music -> ExpandedMusic(g, now)
+                        item != null -> Collapsed(g, dots, left = { ItemLeft(item) }, right = { ItemRight(item, now) })
+                        music -> Collapsed(g, dots, left = { MusicArt(22.dp) }, right = { Equalizer() })
+                        else -> Collapsed(g, dots, left = {}, right = {})
+                    }
+                }
+            }
         }
     }
 }

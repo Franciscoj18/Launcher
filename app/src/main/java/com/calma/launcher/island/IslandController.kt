@@ -57,6 +57,11 @@ class IslandController(private val svc: PanelService) {
     private var root: FrameLayout? = null
     private var owner: OverlayOwner? = null
     private var ready = false
+    private var lp: WindowManager.LayoutParams? = null
+    private var camX = 0
+    private var screenW = 0
+    private var curW = -1
+    private var curH = -1
     lateinit var geometry: IslandGeometry
         private set
 
@@ -75,6 +80,8 @@ class IslandController(private val svc: PanelService) {
         geometry = IslandGeometry(pillH, gap, dm.widthPixels / d - 24f)
 
         val centerX = cut?.centerX() ?: (dm.widthPixels / 2)
+        camX = centerX
+        screenW = dm.widthPixels
         val yPx = if (cut == null) (6 * d).toInt()
         else max(0, (cut.exactCenterY() - pillH * d / 2f).roundToInt())
 
@@ -90,10 +97,10 @@ class IslandController(private val svc: PanelService) {
         val compose = ComposeView(svc).apply {
             setContent { CalmaTheme { IslandUi(this@IslandController) } }
         }
-        r.addView(compose, FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT))
-        val lp = WindowManager.LayoutParams(
-            WindowManager.LayoutParams.WRAP_CONTENT,
-            WindowManager.LayoutParams.WRAP_CONTENT,
+        r.addView(compose, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+        val params = WindowManager.LayoutParams(
+            1,
+            1,
             WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                 WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
@@ -102,22 +109,40 @@ class IslandController(private val svc: PanelService) {
                 WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH,
             PixelFormat.TRANSLUCENT,
         ).apply {
-            gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
-            x = centerX - dm.widthPixels / 2
+            gravity = Gravity.TOP or Gravity.START
+            x = (centerX - 1).coerceAtLeast(0)
             y = yPx + (Prefs.islandY * d).roundToInt()
             if (Build.VERSION.SDK_INT >= 28) {
                 layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
             }
         }
         try {
-            wm.addView(r, lp)
+            wm.addView(r, params)
             root = r
+            lp = params
+            curW = 1
+            curH = 1
         } catch (e: Exception) {
             o.stop()
             owner = null
             return
         }
         registerListeners()
+    }
+
+    /** Cambia el tamaño de la ventana, siempre centrada sobre la cámara. */
+    fun setWindowSize(width: Int, height: Int) {
+        val r = root ?: return
+        val p = lp ?: return
+        val wpx = width.coerceIn(1, screenW)
+        val hpx = height.coerceAtLeast(1)
+        if (wpx == curW && hpx == curH) return
+        curW = wpx
+        curH = hpx
+        p.width = wpx
+        p.height = hpx
+        p.x = (camX - wpx / 2).coerceIn(0, (screenW - wpx).coerceAtLeast(0))
+        try { wm.updateViewLayout(r, p) } catch (_: Exception) {}
     }
 
     fun detach() {

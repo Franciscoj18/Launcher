@@ -12,8 +12,8 @@ android {
         applicationId = "com.calma.launcher"
         minSdk = 29          // Android 10 (Moto G9 Play)
         targetSdk = 34
-        versionCode = 6
-        versionName = "1.4"
+        versionCode = 7
+        versionName = "1.4.1"
     }
 
     signingConfigs {
