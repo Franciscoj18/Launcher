@@ -107,6 +107,10 @@ object Prefs {
     var panelButtons by mutableStateOf("wifi,data,bt,torch,rotate,dnd,shot,lock")
         private set
 
+    // Control de volumen propio
+    var customVolume by mutableStateOf(true)
+        private set
+
     // Isla dinámica
     var islandEnabled by mutableStateOf(true)
         private set
@@ -165,6 +169,7 @@ object Prefs {
         panelSide = sp.getString("panelSide", "right") ?: "right"
         panelHome = sp.getBoolean("panelHome", true)
         panelButtons = sp.getString("panelButtons", "wifi,data,bt,torch,rotate,dnd,shot,lock") ?: ""
+        customVolume = sp.getBoolean("customVolume", true)
         islandEnabled = sp.getBoolean("islandEnabled", true)
         islandFeatures = sp.getString("islandFeatures", islandFeatures) ?: islandFeatures
         if (!sp.getBoolean("islandOpt15", false)) {
@@ -204,6 +209,7 @@ object Prefs {
         panelButtons = all.filter { it in cur }.joinToString(",")
         sp.edit().putString("panelButtons", panelButtons).apply()
     }
+    fun setCustomVolumeValue(v: Boolean) { customVolume = v; sp.edit().putBoolean("customVolume", v).apply() }
     fun setIslandEnabledValue(v: Boolean) { islandEnabled = v; sp.edit().putBoolean("islandEnabled", v).apply() }
     fun setIslandIdleValue(v: Boolean) { islandIdle = v; sp.edit().putBoolean("islandIdle", v).apply() }
     fun setIslandHideLandscapeValue(v: Boolean) { islandHideLandscape = v; sp.edit().putBoolean("islandHideLandscape", v).apply() }

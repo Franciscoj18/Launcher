@@ -390,6 +390,18 @@ private fun SettingsScreen(resumeTick: Int) {
             }
         }
 
+        // ---------- Control de volumen ----------
+        Card {
+            Title("Control de volumen")
+            Body("Reemplaza la barra de volumen de Motorola por la de Calma. Tócala para ver música, timbre y alarma. En llamadas y con la cámara abierta, los botones funcionan como siempre.")
+            if (!panelEnabled) {
+                Body("⚠ Usa el permiso de accesibilidad del panel de controles. Actívalo arriba.")
+            } else {
+                Body("Si después de actualizar sigue saliendo la barra de Motorola, desactiva y vuelve a activar Calma en Accesibilidad una vez.")
+            }
+            SwitchLine("Usar la barra de volumen de Calma", Prefs.customVolume) { Prefs.setCustomVolumeValue(it) }
+        }
+
         // ---------- Isla dinámica ----------
         Card {
             Title("Isla dinámica")

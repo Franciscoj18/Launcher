@@ -32,6 +32,7 @@ import com.calma.launcher.data.HomeWallpaper
 import com.calma.launcher.data.Prefs
 import com.calma.launcher.island.Island
 import com.calma.launcher.island.IslandController
+import com.calma.launcher.volume.VolumeController
 import com.calma.launcher.ui.CalmaTheme
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.cancel
@@ -62,6 +63,7 @@ class PanelService : AccessibilityService(), PanelHost {
     private var owner: OverlayOwner? = null
     private val visible = mutableStateOf(false)
     private var island: IslandController? = null
+    private var volume: VolumeController? = null
 
     override val hostContext: Context get() = this
 
@@ -71,6 +73,7 @@ class PanelService : AccessibilityService(), PanelHost {
         wm = getSystemService(WindowManager::class.java)
         addTrigger()
         refreshIsland()
+        volume = VolumeController(this).also { it.start() }
         // Prepara el panel en segundo plano para que la primera vez también abra rápido
         main.postDelayed({ ensurePanelWindow() }, 2000)
         Island.landscape = resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
@@ -81,6 +84,11 @@ class PanelService : AccessibilityService(), PanelHost {
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {}
+
+    /** Botones de volumen: los maneja Calma con su propia barra (si está activado). */
+    override fun onKeyEvent(event: KeyEvent): Boolean {
+        return try { volume?.onKey(event) ?: false } catch (e: Exception) { false }
+    }
     override fun onInterrupt() {}
 
     override fun onConfigurationChanged(newConfig: Configuration) {
@@ -98,6 +106,8 @@ class PanelService : AccessibilityService(), PanelHost {
     }
 
     override fun onDestroy() {
+        volume?.stop()
+        volume = null
         island?.detach()
         island = null
         removeTrigger()
